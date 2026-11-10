@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(40);
 
 -- 시드 (postgres 권한): A, C는 family X / B는 family Y
 insert into auth.users (id, email) values
@@ -103,6 +103,23 @@ insert into items (id, list_id, family_id, name, created_by) values
 select is((select created_by from items where id = '30000000-0000-0000-0000-0000000000f1'),
   '00000000-0000-0000-0000-0000000000a1'::uuid, 'created_by forced to caller');
 
+-- 컬럼 grant만 검증 (RLS 통과 대상인 본인 가족 행)
+select throws_ok($$update items set family_id = family_id where id = '30000000-0000-0000-0000-0000000000f1'$$,
+  '42501', null, 'items.family_id update denied by column grant');
+
+-- upsert(ignoreDuplicates) = insert ... on conflict (id) do nothing
+select lives_ok($$insert into items (id, list_id, family_id, name) values ('30000000-0000-0000-0000-0000000000f2', '20000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a', 'orig') on conflict (id) do nothing$$,
+  'on conflict do nothing: first insert succeeds');
+select lives_ok($$insert into items (id, list_id, family_id, name) values ('30000000-0000-0000-0000-0000000000f2', '20000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a', 'changed') on conflict (id) do nothing$$,
+  'on conflict do nothing: repeat succeeds');
+select is((select count(*)::int from items where id = '30000000-0000-0000-0000-0000000000f2'), 1,
+  'repeat upsert leaves one row');
+select is((select name from items where id = '30000000-0000-0000-0000-0000000000f2'), 'orig',
+  'repeat upsert keeps original name');
+
+select is((select name from families where id = '10000000-0000-0000-0000-00000000000a'), 'X2',
+  'family rename persisted');
+
 -- updated_at 트리거는 컬럼 권한과 무관하게 동작
 select lives_ok($$update items set is_done = true where id = '30000000-0000-0000-0000-0000000000f1'$$,
   'member can update allowed item columns');
@@ -122,13 +139,15 @@ with d as (delete from list_locations where family_id = '10000000-0000-0000-0000
 select is((select count(*)::int from d), 0, 'A delete on Y list_locations: 0 rows');
 select is((select count(*)::int from list_locations where family_id = '10000000-0000-0000-0000-00000000000b'), 0,
   'A cannot see Y list_locations');
-with d as (delete from families where id = '10000000-0000-0000-0000-00000000000b' returning 1)
-select is((select count(*)::int from d), 0, 'A delete on Y family: 0 rows');
-with d as (delete from family_members where family_id = '10000000-0000-0000-0000-00000000000b' returning 1)
-select is((select count(*)::int from d), 0, 'A delete on Y family_members: 0 rows');
+select throws_ok($$delete from families where id = '10000000-0000-0000-0000-00000000000b'$$,
+  '42501', null, 'A delete on families denied (RPC only)');
+select throws_ok($$delete from family_members where family_id = '10000000-0000-0000-0000-00000000000b'$$,
+  '42501', null, 'A delete on family_members denied (RPC only)');
+select throws_ok($$update family_members set user_id = user_id where family_id = '10000000-0000-0000-0000-00000000000a'$$,
+  '42501', null, 'A update on family_members denied');
 
 reset role;
-select is((select count(*)::int from items), 5, 'postgres sees all items (sanity)');
+select is((select count(*)::int from items), 6, 'postgres sees all items (sanity)');
 
 select * from finish();
 rollback;

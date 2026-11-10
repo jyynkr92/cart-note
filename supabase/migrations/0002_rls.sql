@@ -103,5 +103,11 @@ revoke execute on function public.prevent_inbox_delete(), public.ensure_store_li
   public.set_updated_at(), public.guard_list_update(), public.set_item_created_by()
   from public, anon;
 
+-- 방어적 이중 차단: 멤버십/가족 변경은 RPC(security definer) 전용
+revoke update on public.family_members from authenticated;
+revoke insert, delete on public.families, public.family_members from authenticated;
+alter default privileges in schema public revoke all on tables from anon;
+alter default privileges in schema public revoke truncate, references, trigger on tables from authenticated;
+
 -- Realtime
 alter publication supabase_realtime add table public.items, public.lists, public.list_locations;
