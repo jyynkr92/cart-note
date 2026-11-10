@@ -44,3 +44,6 @@ example
 
 # SDD scratch
 .superpowers/
+
+# local env (keep .env.example tracked)
+.env
