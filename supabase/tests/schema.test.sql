@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(6);
+select plan(12);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'a@test.dev');
@@ -12,7 +12,8 @@ insert into families (id, name, invite_code, created_by) values
 insert into lists (id, family_id, name, kind) values
   ('20000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a', '사야할것', 'inbox'),
   ('20000000-0000-0000-0000-00000000000b', '10000000-0000-0000-0000-00000000000b', '사야할것', 'inbox'),
-  ('20000000-0000-0000-0000-0000000000c1', '10000000-0000-0000-0000-00000000000a', '온라인', 'online');
+  ('20000000-0000-0000-0000-0000000000c1', '10000000-0000-0000-0000-00000000000a', '온라인', 'online'),
+  ('20000000-0000-0000-0000-0000000000c2', '10000000-0000-0000-0000-00000000000a', '마트', 'store');
 
 select throws_ok(
   $$insert into lists (family_id, name, kind) values ('10000000-0000-0000-0000-00000000000a', 'x', 'inbox')$$,
@@ -37,11 +38,34 @@ select throws_ok(
   $$insert into list_locations (list_id, family_id, place_name, lat, lng) values ('20000000-0000-0000-0000-0000000000c1', '10000000-0000-0000-0000-00000000000a', 'p', 37.5, 127.0)$$,
   null, 'locations only allowed on store lists', 'location on non-store list rejected');
 
+select lives_ok(
+  $$insert into list_locations (list_id, family_id, place_name, lat, lng) values ('20000000-0000-0000-0000-0000000000c2', '10000000-0000-0000-0000-00000000000a', 'p', 37.5, 127.0)$$,
+  'location on store list allowed');
+
+select is((select radius_m from list_locations where place_name = 'p'), 300, 'radius_m defaults to 300');
+
+select throws_ok(
+  $$update lists set kind = 'online' where id = '20000000-0000-0000-0000-00000000000a'$$,
+  null, 'inbox kind cannot change', 'inbox kind change blocked');
+
+select throws_ok(
+  $$update lists set kind = 'online' where id = '20000000-0000-0000-0000-0000000000c2'$$,
+  null, 'list has locations', 'store with locations cannot change kind');
+
+select throws_ok(
+  $$update lists set family_id = '10000000-0000-0000-0000-00000000000b' where id = '20000000-0000-0000-0000-0000000000c1'$$,
+  null, 'family_id is immutable', 'list family_id immutable');
+
 delete from families where id = '10000000-0000-0000-0000-00000000000a';
 select is(
   (select count(*) from lists where family_id = '10000000-0000-0000-0000-00000000000a')
   + (select count(*) from items where family_id = '10000000-0000-0000-0000-00000000000a'),
   0::bigint, 'family delete cascades to lists and items');
+
+
+select is(
+  (select count(*) from lists where family_id = '10000000-0000-0000-0000-00000000000b'),
+  1::bigint, 'other family lists survive family delete');
 
 select * from finish();
 rollback;

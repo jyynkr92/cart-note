@@ -70,7 +70,7 @@ create index items_family_id_idx on public.items (family_id);
 
 -- inbox 목록은 삭제 불가. 부모 family가 이미 삭제 중(cascade)이면 허용한다.
 create function public.prevent_inbox_delete() returns trigger
-language plpgsql set search_path = '' as $$
+language plpgsql security definer set search_path = '' as $$
 begin
   if old.kind = 'inbox'
      and exists (select 1 from public.families where id = old.family_id) then
@@ -112,3 +112,27 @@ $$;
 create trigger set_updated_at
   before update on public.items
   for each row execute function public.set_updated_at();
+
+-- lists.kind 변경 제한, lists.family_id 불변
+create function public.guard_list_update() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if new.family_id is distinct from old.family_id then
+    raise exception 'family_id is immutable';
+  end if;
+  if new.kind is distinct from old.kind then
+    if old.kind = 'inbox' or new.kind = 'inbox' then
+      raise exception 'inbox kind cannot change';
+    end if;
+    if old.kind = 'store'
+       and exists (select 1 from public.list_locations where list_id = old.id) then
+      raise exception 'list has locations';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger guard_list_update
+  before update on public.lists
+  for each row execute function public.guard_list_update();
