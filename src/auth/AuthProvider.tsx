@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 import { supabase } from '@/src/lib/supabase';
+import { capturePendingInvite } from '@/src/onboarding/pending-invite';
 import { setSessionFromUrl } from './auth-api';
 
 export const LINK_ERROR_MESSAGE =
@@ -47,7 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 매직링크 딥링크(cartnote://auth#access_token=…)로 세션 설정
   useEffect(() => {
     const handle = (url: string | null) => {
-      if (!url || !/^cartnote:\/\/auth(?![\w.-])/.test(url)) return;
+      if (!url) return;
+      if (/^cartnote:\/\/join(?![\w.-])/.test(url)) {
+        capturePendingInvite(url).catch(() => {});
+        return;
+      }
+      if (!/^cartnote:\/\/auth(?![\w.-])/.test(url)) return;
       setSessionFromUrl(url).then(
         () => setLinkError(null),
         () => setLinkError(LINK_ERROR_MESSAGE),

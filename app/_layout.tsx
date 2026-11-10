@@ -14,19 +14,15 @@ export {
 } from 'expo-router';
 
 function RootNavigator() {
-  const { session, loading } = useAuth();
+  const { loading } = useAuth();
 
   if (loading) return null;
 
-  // Task 6에서 온보딩 가드로 교체
+  // 인증/온보딩 리다이렉트는 (auth)/_layout, (app)/_layout 가드가 담당한다.
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!!session}>
-        <Stack.Screen name="(app)" />
-      </Stack.Protected>
-      <Stack.Protected guard={!session}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
+      <Stack.Screen name="(app)" />
+      <Stack.Screen name="(auth)" />
     </Stack>
   );
 }
