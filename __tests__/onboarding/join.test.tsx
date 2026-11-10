@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import Join from '@/app/(auth)/join';
 import { GroupError, joinFamily } from '@/src/groups/group-api';
@@ -18,8 +19,19 @@ jest.mock('@/src/onboarding/pending-invite', () => ({
   clearPendingInvite: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('@/src/lib/supabase', () => ({ supabase: {} }));
+jest.mock('@/src/auth/AuthProvider', () => ({
+  useAuth: () => ({ session: { user: { id: 'u1' } }, loading: false }),
+}));
 
 const join = joinFamily as jest.Mock;
+
+let testClient: QueryClient;
+const renderJoin = () =>
+  render(
+    <QueryClientProvider client={(testClient = new QueryClient())}>
+      <Join />
+    </QueryClientProvider>
+  );
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -27,7 +39,7 @@ beforeEach(() => {
 });
 
 async function submit(code = '123456') {
-  await render(<Join />);
+  await renderJoin();
   await fireEvent.changeText(screen.getByPlaceholderText('000000'), code);
   await fireEvent.press(screen.getByText('참여'));
 }
@@ -51,7 +63,7 @@ it('treats an unknown thrown error as a network error', async () => {
 });
 
 it('disables the button below 6 digits', async () => {
-  await render(<Join />);
+  await renderJoin();
   await fireEvent.changeText(screen.getByPlaceholderText('000000'), '12345');
   expect(screen.getByRole('button', { name: '참여' })).toBeDisabled();
   await fireEvent.press(screen.getByText('참여'));
@@ -70,12 +82,23 @@ it('joins, clears the pending invite and goes home', async () => {
 
 it('prefills the code from the deep link param', async () => {
   mockParams = { code: '654321' };
-  await render(<Join />);
+  await renderJoin();
   expect(screen.getByDisplayValue('654321')).toBeTruthy();
 });
 
 it('prefills from the pending invite', async () => {
   (getPendingInvite as jest.Mock).mockResolvedValueOnce('111222');
-  await render(<Join />);
+  await renderJoin();
   expect(await screen.findByDisplayValue('111222')).toBeTruthy();
+});
+
+it('invalidates onboarding and families after joining', async () => {
+  join.mockResolvedValue('f1');
+  await renderJoin();
+  const spy = jest.spyOn(testClient, 'invalidateQueries');
+  await fireEvent.changeText(screen.getByPlaceholderText('000000'), '123456');
+  await fireEvent.press(screen.getByText('참여'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+  const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] }).queryKey);
+  expect(keys).toEqual(expect.arrayContaining([['onboarding', 'u1'], ['families']]));
 });

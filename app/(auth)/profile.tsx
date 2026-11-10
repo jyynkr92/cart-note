@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -5,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { qk } from '@/src/lib/query-keys';
 import { normalizeName } from '@/src/lib/text';
 import { createProfile } from '@/src/onboarding/profile-api';
 
 export default function Profile() {
   const { session } = useAuth();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +25,14 @@ export default function Profile() {
     setError(null);
     try {
       await createProfile(session.user.id, normalized);
+      // 가드가 새 상태를 보기 전에 갱신(비활성 쿼리도 다시 가져옴)해서 /profile로 되돌아가지 않게 한다.
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: qk.onboarding(session.user.id),
+          refetchType: 'all',
+        }),
+        queryClient.invalidateQueries({ queryKey: qk.families(), refetchType: 'all' }),
+      ]);
       router.replace('/');
     } catch {
       setError('저장하지 못했어요. 연결을 확인해 주세요');

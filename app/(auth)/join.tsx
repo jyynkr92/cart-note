@@ -1,10 +1,13 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
+import { useAuth } from '@/src/auth/AuthProvider';
 import { GroupError, joinFamily, type GroupErrorCode } from '@/src/groups/group-api';
+import { qk } from '@/src/lib/query-keys';
 import { normalizeInviteCode } from '@/src/lib/text';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
 
@@ -17,6 +20,8 @@ const ERROR_MESSAGES: Partial<Record<GroupErrorCode, string>> = {
 
 export default function Join() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { session } = useAuth();
   const params = useLocalSearchParams<{ code?: string }>();
   const [code, setCode] = useState(() => normalizeInviteCode(params.code ?? '') ?? '');
   const [busy, setBusy] = useState(false);
@@ -37,6 +42,18 @@ export default function Join() {
 
   const normalized = normalizeInviteCode(code);
 
+  async function refreshOnboarding() {
+    await Promise.all([
+      session
+        ? queryClient.invalidateQueries({
+            queryKey: qk.onboarding(session.user.id),
+            refetchType: 'all',
+          })
+        : undefined,
+      queryClient.invalidateQueries({ queryKey: qk.families(), refetchType: 'all' }),
+    ]);
+  }
+
   async function submit() {
     if (!normalized || busy) return;
     setBusy(true);
@@ -44,6 +61,7 @@ export default function Join() {
     try {
       await joinFamily(normalized);
       await clearPendingInvite();
+      await refreshOnboarding();
       router.replace('/');
     } catch (e) {
       const c = e instanceof GroupError ? e.code : 'network';
@@ -56,6 +74,7 @@ export default function Join() {
 
   async function skip() {
     await clearPendingInvite();
+    await refreshOnboarding();
     router.replace('/');
   }
 
