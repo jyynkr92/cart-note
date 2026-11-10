@@ -76,5 +76,32 @@ create policy items_update on public.items for update to authenticated
 create policy items_delete on public.items for delete to authenticated
   using (public.is_member(family_id));
 
+-- 컬럼 단위 update 권한 (invite_code/created_by/family_id 등 변경 차단)
+revoke update on public.families, public.lists, public.items,
+  public.list_locations, public.profiles from authenticated;
+grant update (name) on public.families to authenticated;
+grant update (name, kind, sort_order) on public.lists to authenticated;
+grant update (list_id, name, note, is_done, done_at, sort_order) on public.items to authenticated;
+grant update (place_name, address, lat, lng, kakao_place_id, radius_m) on public.list_locations to authenticated;
+grant update (display_name) on public.profiles to authenticated;
+
+-- items.created_by는 항상 호출자로 강제 (위조 방지)
+create function public.set_item_created_by() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  new.created_by := (select auth.uid());
+  return new;
+end;
+$$;
+create trigger set_item_created_by
+  before insert on public.items
+  for each row execute function public.set_item_created_by();
+
+-- 불필요한 권한 제거
+revoke truncate, references, trigger on all tables in schema public from authenticated, anon;
+revoke execute on function public.prevent_inbox_delete(), public.ensure_store_list(),
+  public.set_updated_at(), public.guard_list_update(), public.set_item_created_by()
+  from public, anon;
+
 -- Realtime
 alter publication supabase_realtime add table public.items, public.lists, public.list_locations;

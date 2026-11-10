@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(33);
 
 -- 시드 (postgres 권한): A, C는 family X / B는 family Y
 insert into auth.users (id, email) values
@@ -25,10 +25,12 @@ insert into family_members (family_id, user_id) values
 insert into lists (id, family_id, name, kind) values
   ('20000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a', '사야할것', 'inbox'),
   ('20000000-0000-0000-0000-00000000000b', '10000000-0000-0000-0000-00000000000b', '사야할것', 'inbox'),
-  ('20000000-0000-0000-0000-0000000000c2', '10000000-0000-0000-0000-00000000000a', '마트', 'store');
+  ('20000000-0000-0000-0000-0000000000c2', '10000000-0000-0000-0000-00000000000a', '마트', 'store'),
+  ('20000000-0000-0000-0000-0000000000d2', '10000000-0000-0000-0000-00000000000b', '약국', 'store');
 
 insert into list_locations (list_id, family_id, place_name, lat, lng) values
-  ('20000000-0000-0000-0000-0000000000c2', '10000000-0000-0000-0000-00000000000a', '이마트', 37.5, 127.0);
+  ('20000000-0000-0000-0000-0000000000c2', '10000000-0000-0000-0000-00000000000a', '이마트', 37.5, 127.0),
+  ('20000000-0000-0000-0000-0000000000d2', '10000000-0000-0000-0000-00000000000b', '약국', 37.6, 127.1);
 
 insert into items (list_id, family_id, name) values
   ('20000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a', 'milk'),
@@ -38,6 +40,9 @@ insert into items (list_id, family_id, name) values
 -- anon: 아무것도 못 봄
 set local role anon;
 select throws_ok($$select count(*) from items$$, '42501', null, 'anon cannot read items');
+select throws_ok($$select count(*) from lists$$, '42501', null, 'anon cannot read lists');
+select throws_ok($$select count(*) from families$$, '42501', null, 'anon cannot read families');
+select throws_ok($$select count(*) from profiles$$, '42501', null, 'anon cannot read profiles');
 reset role;
 
 -- A로 전환
@@ -84,8 +89,46 @@ select throws_ok(
   $$update lists set kind = 'online' where id = '20000000-0000-0000-0000-0000000000c2'$$,
   null, 'list has locations', 'guard trigger still sees locations under RLS');
 
+-- 컬럼 단위 update 제한
+select throws_ok($$update families set invite_code = '424242' where id = '10000000-0000-0000-0000-00000000000a'$$,
+  '42501', null, 'member cannot change invite_code');
+select throws_ok($$update families set created_by = '00000000-0000-0000-0000-0000000000b1' where id = '10000000-0000-0000-0000-00000000000a'$$,
+  '42501', null, 'member cannot change created_by');
+select throws_ok($$update items set family_id = '10000000-0000-0000-0000-00000000000b' where name = 'milk'$$,
+  '42501', null, 'member cannot change items.family_id');
+
+-- created_by 위조 방지
+insert into items (id, list_id, family_id, name, created_by) values
+  ('30000000-0000-0000-0000-0000000000f1', '20000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a', 'forged', '00000000-0000-0000-0000-0000000000b1');
+select is((select created_by from items where id = '30000000-0000-0000-0000-0000000000f1'),
+  '00000000-0000-0000-0000-0000000000a1'::uuid, 'created_by forced to caller');
+
+-- updated_at 트리거는 컬럼 권한과 무관하게 동작
+select lives_ok($$update items set is_done = true where id = '30000000-0000-0000-0000-0000000000f1'$$,
+  'member can update allowed item columns');
+
+-- 타 가족(Y) 행에 대한 영향 0
+with u as (update items set name = 'x' where family_id = '10000000-0000-0000-0000-00000000000b' returning 1)
+select is((select count(*)::int from u), 0, 'A update on Y items: 0 rows');
+with d as (delete from items where family_id = '10000000-0000-0000-0000-00000000000b' returning 1)
+select is((select count(*)::int from d), 0, 'A delete on Y items: 0 rows');
+with u as (update lists set name = 'x' where family_id = '10000000-0000-0000-0000-00000000000b' returning 1)
+select is((select count(*)::int from u), 0, 'A update on Y lists: 0 rows');
+with d as (delete from lists where family_id = '10000000-0000-0000-0000-00000000000b' returning 1)
+select is((select count(*)::int from d), 0, 'A delete on Y lists: 0 rows');
+with u as (update list_locations set place_name = 'x' where family_id = '10000000-0000-0000-0000-00000000000b' returning 1)
+select is((select count(*)::int from u), 0, 'A update on Y list_locations: 0 rows');
+with d as (delete from list_locations where family_id = '10000000-0000-0000-0000-00000000000b' returning 1)
+select is((select count(*)::int from d), 0, 'A delete on Y list_locations: 0 rows');
+select is((select count(*)::int from list_locations where family_id = '10000000-0000-0000-0000-00000000000b'), 0,
+  'A cannot see Y list_locations');
+with d as (delete from families where id = '10000000-0000-0000-0000-00000000000b' returning 1)
+select is((select count(*)::int from d), 0, 'A delete on Y family: 0 rows');
+with d as (delete from family_members where family_id = '10000000-0000-0000-0000-00000000000b' returning 1)
+select is((select count(*)::int from d), 0, 'A delete on Y family_members: 0 rows');
+
 reset role;
-select is((select count(*)::int from items), 4, 'postgres sees all items (sanity)');
+select is((select count(*)::int from items), 5, 'postgres sees all items (sanity)');
 
 select * from finish();
 rollback;
