@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
+import { clearUserCache } from '@/src/lib/query-client';
 import { supabase } from '@/src/lib/supabase';
 import { capturePendingInvite } from '@/src/onboarding/pending-invite';
 import { setSessionFromUrl } from './auth-api';
@@ -38,7 +39,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearLinkError = useCallback(() => setLinkError(null), []);
 
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      // 같은 기기의 다른 사용자가 이전 캐시(오프라인 큐 포함)를 보지 못하게 로그아웃 시 즉시 비운다.
+      if (event === 'SIGNED_OUT') void clearUserCache().catch(() => {});
       setSession(next);
       setLoading(false);
     });
@@ -56,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!/^cartnote:\/\/auth(?![\w.-])/.test(url)) return;
       setSessionFromUrl(url).then(
         () => setLinkError(null),
-        () => setLinkError(LINK_ERROR_MESSAGE),
+        () => setLinkError(LINK_ERROR_MESSAGE)
       );
     };
     Linking.getInitialURL().then(handle);
@@ -78,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({ session, loading, linkError, clearLinkError }),
-    [session, loading, linkError, clearLinkError],
+    [session, loading, linkError, clearLinkError]
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
