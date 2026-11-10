@@ -14,3 +14,15 @@ describe('parseAuthFragment', () => {
     expect(parseAuthFragment('cartnote://auth#error=access_denied')).toBeNull();
   });
 });
+
+describe('parseAuthFragment rejects foreign links', () => {
+  it('rejects other hosts and schemes', () => {
+    expect(parseAuthFragment('https://evil.example/#access_token=a&refresh_token=b')).toBeNull();
+    expect(parseAuthFragment('cartnote://other#access_token=a&refresh_token=b')).toBeNull();
+    expect(parseAuthFragment('cartnote://auth.evil.com#access_token=a&refresh_token=b')).toBeNull();
+    expect(parseAuthFragment('cartnote://authx#access_token=a&refresh_token=b')).toBeNull();
+  });
+  it('rejects a missing refresh_token', () => {
+    expect(parseAuthFragment('cartnote://auth#access_token=a&refresh_token=')).toBeNull();
+  });
+});

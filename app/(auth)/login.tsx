@@ -3,11 +3,13 @@ import { View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
+import { useAuth } from '@/src/auth/AuthProvider';
 import { sendOtp, verifyOtp } from '@/src/auth/auth-api';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Login() {
+  const { linkError, clearLinkError } = useAuth();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'email' | 'code'>('email');
@@ -21,6 +23,7 @@ export default function Login() {
     if (!emailValid || busy) return;
     setBusy(true);
     setError(null);
+    clearLinkError();
     try {
       await sendOtp(trimmedEmail);
       setCode('');
@@ -48,6 +51,7 @@ export default function Login() {
   return (
     <View className="flex-1 justify-center gap-4 bg-background px-6">
       <Text className="text-2xl font-bold">Cart Note</Text>
+      {linkError ? <Text className="text-destructive">{linkError}</Text> : null}
       {step === 'email' ? (
         <>
           <Input
@@ -80,6 +84,16 @@ export default function Login() {
           {error ? <Text className="text-destructive">{error}</Text> : null}
           <Button variant="ghost" onPress={requestCode} disabled={busy}>
             <Text>코드 다시 받기</Text>
+          </Button>
+          <Button
+            variant="ghost"
+            onPress={() => {
+              setStep('email');
+              setCode('');
+              setError(null);
+            }}
+          >
+            <Text>이메일 다시 입력</Text>
           </Button>
         </>
       )}

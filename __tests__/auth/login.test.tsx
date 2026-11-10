@@ -7,6 +7,8 @@ jest.mock('@/src/auth/auth-api', () => ({
   verifyOtp: jest.fn(),
 }));
 
+jest.mock('@/src/lib/supabase', () => ({ supabase: { auth: {} } }));
+
 const sendOtpMock = sendOtp as jest.Mock;
 const verifyOtpMock = verifyOtp as jest.Mock;
 
@@ -50,4 +52,24 @@ it('disables the send button for an invalid email', async () => {
   await fireEvent.press(screen.getByText('코드 받기'));
   expect(sendOtpMock).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: '코드 받기' })).toBeDisabled();
+});
+
+it('shows the link error from the auth provider', async () => {
+  jest.spyOn(require('@/src/auth/AuthProvider'), 'useAuth').mockReturnValue({
+    session: null,
+    loading: false,
+    linkError: '로그인 링크가 만료되었거나 올바르지 않아요. 코드로 로그인해 주세요',
+    clearLinkError: jest.fn(),
+  });
+  await render(<Login />);
+  expect(
+    screen.getByText('로그인 링크가 만료되었거나 올바르지 않아요. 코드로 로그인해 주세요'),
+  ).toBeTruthy();
+  jest.restoreAllMocks();
+});
+
+it('goes back to the email step', async () => {
+  await goToCodeStep();
+  await fireEvent.press(screen.getByText('이메일 다시 입력'));
+  expect(screen.getByPlaceholderText('이메일')).toBeTruthy();
 });

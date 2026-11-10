@@ -254,6 +254,11 @@ otp_expiry = 3600
 subject = "Cart Note 로그인 코드"
 content_path = "./supabase/templates/magic_link.html"
 
+# New addresses get the "confirmation" template from signInWithOtp, so it needs the code too.
+[auth.email.template.confirmation]
+subject = "Cart Note 로그인 코드"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"
