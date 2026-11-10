@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(29);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'a@test.dev'),
@@ -52,8 +52,12 @@ select is((select join_family(current_setting('t.code'))->>'error'), case when c
 -- join_attempts 직접 접근 불가
 select throws_ok($$select count(*) from join_attempts$$, '42501', null, 'join_attempts not readable by authenticated');
 
--- 무차별 대입 제한: 실패 9회 더(위 old code 1회 포함 → 총 10회) 후 올바른 코드도 거부
-select join_family('00000000') from generate_series(1, 9);
+select throws_ok($$select gen_invite_code()$$, '42501', null, 'authenticated cannot execute gen_invite_code');
+
+-- 무차별 대입 제한 경계: 위 old code 1회 + 8회 = 실패 9회 후에도 10번째 시도는 허용
+select join_family('00000000') from generate_series(1, 8);
+select is((select join_family('00000000')->>'error'), 'invalid_code', '10th attempt (after 9 failures) still allowed');
+-- 실패 10회 후에는 올바른 코드도 거부
 select throws_ok($$select join_family(current_setting('t.newcode'))$$, 'P0001', 'too_many_attempts', '11th attempt with valid code throttled');
 -- 퇴장
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';

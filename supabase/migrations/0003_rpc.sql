@@ -61,6 +61,12 @@ declare
 begin
   if v_uid is null then raise exception 'not authenticated'; end if;
 
+  -- 동일 사용자의 병렬 요청 직렬화 (카운트 후 삽입 경합으로 제한 우회 방지)
+  perform pg_advisory_xact_lock(hashtext('join_family:' || v_uid::text));
+
+  delete from public.join_attempts
+  where user_id = v_uid and attempted_at < now() - interval '1 day';
+
   if (select count(*) from public.join_attempts
       where user_id = v_uid and not succeeded
         and attempted_at > now() - interval '10 minutes') >= 10 then
@@ -73,12 +79,9 @@ begin
     return jsonb_build_object('error', 'invalid_code');
   end if;
 
-  if exists (select 1 from public.family_members where family_id = v_fid and user_id = v_uid) then
-    raise exception 'already_member';
-  end if;
-
-  insert into public.family_members (family_id, user_id) values (v_fid, v_uid);
-  insert into public.join_attempts (user_id, succeeded) values (v_uid, true);
+  insert into public.family_members (family_id, user_id) values (v_fid, v_uid)
+  on conflict do nothing;
+  if not found then raise exception 'already_member'; end if;
   return jsonb_build_object('family_id', v_fid);
 end;
 $$;
@@ -89,6 +92,10 @@ declare
   v_uid uuid := (select auth.uid());
 begin
   if v_uid is null then raise exception 'not authenticated'; end if;
+
+  if not exists (select 1 from public.family_members where family_id = p_family_id and user_id = v_uid) then
+    raise exception 'not_member';
+  end if;
 
   -- 동시 leave 경합 방지: family 행 잠금
   perform 1 from public.families where id = p_family_id for update;
