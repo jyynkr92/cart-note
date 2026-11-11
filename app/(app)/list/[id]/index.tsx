@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, BackHandler, ScrollView, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -22,6 +22,7 @@ import { Text } from '@/components/ui/text';
 import { useCurrentGroup } from '@/src/groups/use-groups';
 import { ItemEditSheet } from '@/src/items/ItemEditSheet';
 import { ItemRow } from '@/src/items/ItemRow';
+import { MoveSheet } from '@/src/items/MoveSheet';
 import type { Item } from '@/src/items/item-api';
 import { sortItems } from '@/src/items/sort-items';
 import {
@@ -30,14 +31,16 @@ import {
   useClearList,
   useDeleteItems,
   useItems,
+  useMoveItems,
   useToggleItem,
   useUpdateItem,
 } from '@/src/items/use-items';
 import { normalizeName } from '@/src/lib/text';
+import { useSelection } from '@/src/items/use-selection';
 import { useTopInset } from '@/src/lib/use-top-inset';
 import { useDeleteList, useLists, useRenameList } from '@/src/lists/use-lists';
 
-type Mode = 'rename' | 'clear' | 'delete' | null;
+type Mode = 'rename' | 'clear' | 'delete' | 'deleteSelected' | 'move' | null;
 
 export default function ListDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -53,6 +56,7 @@ export default function ListDetail() {
   const toggleItem = useToggleItem();
   const updateItem = useUpdateItem();
   const deleteItems = useDeleteItems();
+  const moveItems = useMoveItems();
   const clearDone = useClearDone();
   const clearList = useClearList();
   const renameList = useRenameList();
@@ -64,6 +68,28 @@ export default function ListDetail() {
   const [listName, setListName] = useState('');
   // 삭제 직후 캐시에서 목록이 먼저 사라져도 "찾을 수 없어요"가 깜빡이지 않게 한다.
   const [deleting, setDeleting] = useState(false);
+
+  const selection = useSelection();
+  const { retain, clear: clearSelection } = selection;
+  const itemIds = items.data?.map((i) => i.id);
+
+  // 선택한 항목이 사라지면(예: 실시간 삭제) 선택에서 뺀다. 목록이 바뀌면 선택을 초기화한다.
+  useEffect(() => {
+    if (itemIds) retain(itemIds);
+  }, [itemIds?.join(','), retain]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    clearSelection();
+    setMode((m) => (m === 'move' || m === 'deleteSelected' ? null : m));
+  }, [id, clearSelection]);
+  // 하드웨어 뒤로가기는 선택 모드부터 끝낸다.
+  useEffect(() => {
+    if (!selection.active) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      clearSelection();
+      return true;
+    });
+    return () => sub.remove();
+  }, [selection.active, clearSelection]);
 
   const goHome = () => router.replace('/');
   const wrap = (children: React.ReactNode) => (
@@ -115,6 +141,25 @@ export default function ListDetail() {
     setText('');
   }
 
+  // 현재 목록에 실제로 있는 항목만 보낸다.
+  const selectedIds = (items.data ?? [])
+    .filter((i) => selection.selected.has(i.id))
+    .map((i) => i.id);
+  const moveTargets = (lists.data ?? []).filter((l) => l.id !== listId);
+
+  function confirmMove(toListId: string) {
+    if (selectedIds.length > 0)
+      moveItems.mutate({ fromListId: listId, toListId, ids: selectedIds });
+    selection.clear();
+    setMode(null);
+  }
+
+  function confirmDeleteSelected() {
+    if (selectedIds.length > 0) deleteItems.mutate({ listId, ids: selectedIds });
+    selection.clear();
+    setMode(null);
+  }
+
   function openRename() {
     setListName(list!.name);
     setMode('rename');
@@ -141,54 +186,75 @@ export default function ListDetail() {
 
   return wrap(
     <>
-      <View className="flex-row items-center justify-between gap-2 pb-3">
-        <View className="flex-1 flex-row items-center gap-1">
+      {selection.active ? (
+        <View className="flex-row items-center justify-between gap-2 pb-3">
+          <Text className="flex-1 text-xl font-bold">{`${selectedIds.length}개 선택됨`}</Text>
+          <Button variant="ghost" accessibilityLabel="선택 취소" onPress={selection.clear}>
+            <Text>취소</Text>
+          </Button>
           <Button
             variant="ghost"
-            size="icon"
-            accessibilityLabel="뒤로"
-            onPress={() => router.back()}>
-            <Text>‹</Text>
+            accessibilityLabel="선택 항목 이동"
+            onPress={() => setMode('move')}>
+            <Text>이동</Text>
           </Button>
-          <Text className="flex-1 text-xl font-bold" numberOfLines={1}>
-            {list.name}
-          </Text>
+          <Button
+            variant="ghost"
+            accessibilityLabel="선택 항목 삭제"
+            onPress={() => setMode('deleteSelected')}>
+            <Text className="text-destructive">삭제</Text>
+          </Button>
         </View>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" accessibilityLabel="목록 메뉴">
-              <Text>⋯</Text>
+      ) : (
+        <View className="flex-row items-center justify-between gap-2 pb-3">
+          <View className="flex-1 flex-row items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              accessibilityLabel="뒤로"
+              onPress={() => router.back()}>
+              <Text>‹</Text>
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-48">
-            <DropdownMenuItem
-              disabled={done.length === 0}
-              onPress={() => clearDone.mutate({ listId })}>
-              <Text>완료 항목 지우기</Text>
-            </DropdownMenuItem>
-            <DropdownMenuItem onPress={() => setMode('clear')}>
-              <Text>목록 비우기</Text>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onPress={openRename}>
-              <Text>이름 변경</Text>
-            </DropdownMenuItem>
-            {list.kind === 'store' ? (
+            <Text className="flex-1 text-xl font-bold" numberOfLines={1}>
+              {list.name}
+            </Text>
+          </View>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" accessibilityLabel="목록 메뉴">
+                <Text>⋯</Text>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
               <DropdownMenuItem
-                onPress={() =>
-                  router.push({ pathname: '/list/[id]/locations', params: { id: listId } })
-                }>
-                <Text>지점 관리</Text>
+                disabled={done.length === 0}
+                onPress={() => clearDone.mutate({ listId })}>
+                <Text>완료 항목 지우기</Text>
               </DropdownMenuItem>
-            ) : null}
-            {list.kind !== 'inbox' ? (
-              <DropdownMenuItem onPress={() => setMode('delete')}>
-                <Text>목록 삭제</Text>
+              <DropdownMenuItem onPress={() => setMode('clear')}>
+                <Text>목록 비우기</Text>
               </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </View>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onPress={openRename}>
+                <Text>이름 변경</Text>
+              </DropdownMenuItem>
+              {list.kind === 'store' ? (
+                <DropdownMenuItem
+                  onPress={() =>
+                    router.push({ pathname: '/list/[id]/locations', params: { id: listId } })
+                  }>
+                  <Text>지점 관리</Text>
+                </DropdownMenuItem>
+              ) : null}
+              {list.kind !== 'inbox' ? (
+                <DropdownMenuItem onPress={() => setMode('delete')}>
+                  <Text>목록 삭제</Text>
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </View>
+      )}
 
       <Input
         placeholder="항목 추가"
@@ -220,6 +286,10 @@ export default function ListDetail() {
               onToggle={(it) => toggleItem.mutate({ item: it })}
               onPress={setEditing}
               onDelete={(it) => deleteItems.mutate({ listId, ids: [it.id] })}
+              selecting={selection.active}
+              selected={selection.selected.has(i.id)}
+              onLongPress={(it) => selection.start(it.id)}
+              onSelectToggle={(it) => selection.toggle(it.id)}
             />
           ))}
           {done.length > 0 ? (
@@ -234,6 +304,10 @@ export default function ListDetail() {
                   onToggle={(it) => toggleItem.mutate({ item: it })}
                   onPress={setEditing}
                   onDelete={(it) => deleteItems.mutate({ listId, ids: [it.id] })}
+                  selecting={selection.active}
+                  selected={selection.selected.has(i.id)}
+                  onLongPress={(it) => selection.start(it.id)}
+                  onSelectToggle={(it) => selection.toggle(it.id)}
                 />
               ))}
             </View>
@@ -249,6 +323,30 @@ export default function ListDetail() {
           setEditing(null);
         }}
       />
+
+      <MoveSheet
+        open={mode === 'move'}
+        lists={moveTargets}
+        onClose={() => setMode(null)}
+        onSelect={confirmMove}
+      />
+
+      <Dialog open={mode === 'deleteSelected'} onOpenChange={(o) => !o && setMode(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>항목 삭제</DialogTitle>
+            <DialogDescription>{`${selectedIds.length}개 항목을 삭제할까요?`}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onPress={() => setMode(null)}>
+              <Text>취소</Text>
+            </Button>
+            <Button variant="destructive" onPress={confirmDeleteSelected}>
+              <Text>삭제</Text>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={mode === 'rename'} onOpenChange={(o) => !o && setMode(null)}>
         <DialogContent>
