@@ -75,7 +75,9 @@ describe('items', () => {
   });
 
   it('UPDATE older than the cached updated_at is ignored', () => {
-    qc.setQueryData(qk.items('l1'), [item('a', { name: 'new', updated_at: '2026-01-05T00:00:00.000Z' })]);
+    qc.setQueryData(qk.items('l1'), [
+      item('a', { name: 'new', updated_at: '2026-01-05T00:00:00.000Z' }),
+    ]);
     applyChange(
       qc,
       'items',
@@ -99,6 +101,62 @@ describe('items', () => {
   });
 });
 
+describe('items while a mutation is pending', () => {
+  beforeEach(() => {
+    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
+  });
+
+  it('UPDATE leaves the optimistic cache alone and skips invalidation', () => {
+    qc.setQueryData(qk.items('l1'), [item('a', { is_done: true })]);
+    applyChange(
+      qc,
+      'items',
+      change('UPDATE', item('a', { is_done: false, updated_at: '2026-02-01T00:00:00.000Z' }))
+    );
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))![0].is_done).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('INSERT is skipped', () => {
+    qc.setQueryData(qk.items('l1'), [item('a')]);
+    applyChange(qc, 'items', change('INSERT', item('b')));
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))).toHaveLength(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('DELETE and lists events do not invalidate items/lists', () => {
+    applyChange(qc, 'items', change('DELETE', null, { id: 'a' }));
+    applyChange(qc, 'lists', change('UPDATE', { id: 'l1', family_id: 'f1' }));
+    applyChange(qc, 'lists', change('DELETE', null, { id: 'l1' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('list_locations still invalidates locations and allLocations', () => {
+    applyChange(
+      qc,
+      'list_locations',
+      change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' })
+    );
+    expect(keys()).toEqual(expect.arrayContaining([qk.locations('l1'), qk.allLocations()]));
+    expect(keys()).not.toContainEqual(qk.lists('f1'));
+  });
+});
+
+describe('ordering', () => {
+  it('inserts into created_at order', () => {
+    qc.setQueryData(qk.items('l1'), [
+      item('a', { created_at: '2026-01-01T00:00:00.000Z' }),
+      item('c', { created_at: '2026-01-03T00:00:00.000Z' }),
+    ]);
+    applyChange(
+      qc,
+      'items',
+      change('INSERT', item('b', { created_at: '2026-01-02T00:00:00.000Z' }))
+    );
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))!.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
 describe('lists', () => {
   it('INSERT/UPDATE invalidate qk.lists(family_id)', () => {
     applyChange(qc, 'lists', change('UPDATE', { id: 'l1', family_id: 'f1' }));
@@ -115,7 +173,11 @@ describe('lists', () => {
 
 describe('list_locations', () => {
   it('INSERT/UPDATE invalidate locations(list_id), allLocations and the lists', () => {
-    applyChange(qc, 'list_locations', change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' }));
+    applyChange(
+      qc,
+      'list_locations',
+      change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' })
+    );
     expect(keys()).toEqual(
       expect.arrayContaining([qk.locations('l1'), qk.allLocations(), qk.lists('f1')])
     );
@@ -123,8 +185,6 @@ describe('list_locations', () => {
 
   it('DELETE invalidates the prefixes', () => {
     applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
-    expect(keys()).toEqual(
-      expect.arrayContaining([['locations'], qk.allLocations(), ['lists']])
-    );
+    expect(keys()).toEqual(expect.arrayContaining([['locations'], qk.allLocations(), ['lists']]));
   });
 });

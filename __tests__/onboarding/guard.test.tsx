@@ -5,6 +5,7 @@ import AppLayout from '@/app/(app)/_layout';
 import { createFamily, fetchMyFamilies } from '@/src/groups/group-api';
 import { getPendingInvite } from '@/src/onboarding/pending-invite';
 import { hasProfile } from '@/src/onboarding/profile-api';
+import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';
 import { qk } from '@/src/lib/query-keys';
 
 jest.mock('expo-router', () => {
@@ -61,6 +62,15 @@ it('renders the app when the user has a group', async () => {
   set(true, null, 1);
   await renderWithClient(<AppLayout />);
   expect(await screen.findByText('READY')).toBeTruthy();
+});
+
+it('mounts realtime only for the ready group', async () => {
+  set(true, null, 0);
+  (fetchMyFamilies as jest.Mock).mockResolvedValue([{ id: 'f1' }]);
+  await renderWithClient(<AppLayout />);
+  expect(await screen.findByText('READY')).toBeTruthy();
+  expect(useFamilyRealtime).toHaveBeenLastCalledWith('f1');
+  expect((useFamilyRealtime as jest.Mock).mock.calls[0][0]).toBeNull();
 });
 
 it('creates the personal group exactly once under StrictMode, showing loading meanwhile', async () => {
