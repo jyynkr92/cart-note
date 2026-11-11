@@ -72,8 +72,8 @@ export async function clearUserCache(client: QueryClient = queryClient): Promise
  */
 export async function syncCacheOwner(client: QueryClient, userId: string | null): Promise<void> {
   const owner = await AsyncStorage.getItem(OWNER_KEY);
-  // 로그아웃이거나 다른 사용자의 캐시일 때만 비운다(같은 사용자의 재로그인은 유지).
-  if (userId === null || (owner !== null && owner !== userId)) await clearUserCache(client);
+  // 로그아웃이거나 소유자가 현재 사용자가 아니면(소유자 기록이 없는 캐시 포함) 비운다.
+  if (userId === null || owner !== userId) await clearUserCache(client);
   if (userId) await AsyncStorage.setItem(OWNER_KEY, userId);
   else await AsyncStorage.removeItem(OWNER_KEY);
 }

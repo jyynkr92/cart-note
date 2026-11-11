@@ -81,6 +81,10 @@ export default function ListDetail() {
     clearSelection();
     setMode((m) => (m === 'move' || m === 'deleteSelected' ? null : m));
   }, [id, clearSelection]);
+  // 선택이 비면(예: 실시간 삭제) 선택 항목용 이동/삭제 대화상자도 닫는다.
+  useEffect(() => {
+    if (!selection.active) setMode((m) => (m === 'move' || m === 'deleteSelected' ? null : m));
+  }, [selection.active]);
   // 하드웨어 뒤로가기는 선택 모드부터 끝낸다.
   useEffect(() => {
     if (!selection.active) return;

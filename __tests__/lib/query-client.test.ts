@@ -205,10 +205,23 @@ describe('privacy: persisted cache', () => {
     await syncCacheOwner(client, null);
     expect(client.getQueryData(qk.items('l1'))).toBeUndefined();
 
-    // 로그아웃 뒤 같은 사용자의 정상 로그인은 캐시를 지우지 않는다.
+    // 로그아웃 뒤에는 소유자 기록이 없으므로 같은 사용자의 재로그인도 비운다(캐시는 이미 비어 있다).
     client.setQueryData(qk.items('l1'), [item('c')]);
     await syncCacheOwner(client, 'u2');
+    expect(client.getQueryData(qk.items('l1'))).toBeUndefined();
+
+    // 이후 같은 사용자는 유지한다.
+    client.setQueryData(qk.items('l1'), [item('d')]);
+    await syncCacheOwner(client, 'u2');
     expect(client.getQueryData(qk.items('l1'))).toBeDefined();
+  });
+
+  it('syncCacheOwner clears a cache with no recorded owner', async () => {
+    const client = createQueryClient();
+    await AsyncStorage.clear();
+    client.setQueryData(qk.items('l1'), [item('a')]);
+    await syncCacheOwner(client, 'u1');
+    expect(client.getQueryData(qk.items('l1'))).toBeUndefined();
   });
 
   it('does not persist onboarding state', () => {

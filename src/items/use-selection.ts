@@ -4,7 +4,12 @@ import { useCallback, useMemo, useState } from 'react';
 export function useSelection() {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
 
-  const start = useCallback((id: string) => setSelected(new Set([id])), []);
+  /** 길게 누르기. 이미 선택 중이면 선택을 새로 시작하지 않고 더한다. */
+  const start = useCallback(
+    (id: string) =>
+      setSelected((prev) => (prev.has(id) ? prev : new Set([...prev, id]))),
+    []
+  );
   const toggle = useCallback(
     (id: string) =>
       setSelected((prev) => {

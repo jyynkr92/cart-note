@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PortalHost } from '@rn-primitives/portal';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { BackHandler } from 'react-native';
 import type { ReactElement } from 'react';
 import ListDetail from '@/app/(app)/list/[id]/index';
 import { fetchMyFamilies, fetchFamilyMembers, type Family } from '@/src/groups/group-api';
@@ -147,6 +148,32 @@ describe('selection mode', () => {
     expect(await screen.findByPlaceholderText('항목 이름')).toBeTruthy();
   });
 
+  it('adds to the selection on another long press instead of restarting it', async () => {
+    await renderWithClient(<ListDetail />);
+    await longPress('우유');
+    await screen.findByText('1개 선택됨');
+    await longPress('빵');
+    expect(await screen.findByText('2개 선택됨')).toBeTruthy();
+  });
+
+  it('ends selection mode on the hardware back button', async () => {
+    let handler: (() => boolean) | undefined;
+    // RN 목의 addEventListener는 jest.fn이라 mockRestore 대신 한 번만 바꾼다.
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementationOnce((_, h) => {
+      handler = h as () => boolean;
+      return { remove: jest.fn() };
+    });
+    await renderWithClient(<ListDetail />);
+    await longPress('우유');
+    await screen.findByText('1개 선택됨');
+    let handled: boolean | undefined;
+    await act(async () => {
+      handled = handler?.();
+    });
+    expect(handled).toBe(true);
+    await waitFor(() => expect(screen.queryByText(/개 선택됨/)).toBeNull());
+  });
+
   it('can select finished items too', async () => {
     await renderWithClient(<ListDetail />);
     await longPress('계란');
@@ -212,6 +239,25 @@ describe('move', () => {
     expect(screen.queryByRole('button', { name: '쿠팡' })).toBeNull();
   });
 
+  it('says so when there is no other list to move to', async () => {
+    lists.mockResolvedValue([list({ id: 'l1', name: '이마트' })]);
+    await renderWithClient(<ListDetail />);
+    await longPress('우유');
+    await fireEvent.press(await screen.findByRole('button', { name: '선택 항목 이동' }));
+    expect(await screen.findByText('이동할 수 있는 목록이 없어요')).toBeTruthy();
+  });
+
+  it('closes the move sheet when the selected items disappear', async () => {
+    await renderWithClient(<ListDetail />);
+    await longPress('우유');
+    await fireEvent.press(await screen.findByRole('button', { name: '선택 항목 이동' }));
+    expect(await screen.findByRole('button', { name: '쿠팡' })).toBeTruthy();
+    items.mockResolvedValue([item({ id: 'i2', name: '빵' })]);
+    await client.invalidateQueries({ queryKey: qk.items('l1') });
+    await waitFor(() => expect(screen.queryByRole('button', { name: '쿠팡' })).toBeNull());
+    expect(moveItems).not.toHaveBeenCalled();
+  });
+
   it('moves from the inbox to other lists without offering itself', async () => {
     mockParams = { id: 'inbox' };
     items.mockResolvedValue([item({ id: 'i1', name: '우유', list_id: 'inbox' })]);
@@ -234,6 +280,17 @@ describe('delete selected', () => {
     await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
     await waitFor(() => expect(deleteItems).toHaveBeenCalledWith(['i1', 'i2']));
     await waitFor(() => expect(screen.queryByText(/개 선택됨/)).toBeNull());
+  });
+
+  it('closes the confirmation when the selected items disappear', async () => {
+    await renderWithClient(<ListDetail />);
+    await longPress('우유');
+    await fireEvent.press(await screen.findByRole('button', { name: '선택 항목 삭제' }));
+    expect(await screen.findByText('1개 항목을 삭제할까요?')).toBeTruthy();
+    items.mockResolvedValue([item({ id: 'i2', name: '빵' })]);
+    await client.invalidateQueries({ queryKey: qk.items('l1') });
+    await waitFor(() => expect(screen.queryByText(/개 항목을 삭제할까요/)).toBeNull());
+    expect(deleteItems).not.toHaveBeenCalled();
   });
 
   it('keeps the selection when the confirmation is cancelled', async () => {
