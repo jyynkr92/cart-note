@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { NearbyAlertToggle } from '@/src/geofence/NearbyAlertToggle';
 import { signOut } from '@/src/auth/auth-api';
 import { resolveCurrentFamily, useCurrentGroupStore } from '@/src/groups/current-group-store';
 import { leaveFamily, regenerateInviteCode } from '@/src/groups/group-api';
@@ -162,6 +163,11 @@ export default function Settings() {
         {(members.data ?? []).map((m) => (
           <Text key={m.user_id}>{m.display_name ?? '이름 없음'}</Text>
         ))}
+      </View>
+
+      <View className="gap-2">
+        <Text className="text-sm text-muted-foreground">위치 알림</Text>
+        <NearbyAlertToggle />
       </View>
 
       <View className="gap-2">

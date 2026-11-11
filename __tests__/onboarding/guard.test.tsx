@@ -25,6 +25,8 @@ jest.mock('@/src/groups/group-api', () => ({
 jest.mock('@/src/realtime/use-family-realtime', () => ({ useFamilyRealtime: jest.fn() }));
 jest.mock('@/src/onboarding/pending-invite', () => ({ getPendingInvite: jest.fn() }));
 jest.mock('@/src/onboarding/profile-api', () => ({ hasProfile: jest.fn() }));
+jest.mock('@/src/geofence/use-geofence-sync', () => ({ useGeofenceSync: jest.fn() }));
+jest.mock('@/src/geofence/notification-route', () => ({ useOpenPendingNotification: jest.fn() }));
 
 const set = (profile: boolean, pending: string | null, groups: number) => {
   (hasProfile as jest.Mock).mockResolvedValue(profile);

@@ -54,3 +54,31 @@ afterAll(() => {
 
 // expo-clipboard는 네이티브 모듈이라 Jest에서는 대체한다.
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn().mockResolvedValue(true) }));
+
+// 위치/백그라운드 작업/알림은 네이티브 모듈이라 Jest에서는 대체한다(테스트에서 반환값을 바꿔 쓴다).
+jest.mock('expo-location', () => ({
+  GeofencingEventType: { Enter: 1, Exit: 2 },
+  Accuracy: { Balanced: 3 },
+  requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  requestBackgroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  getBackgroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  getLastKnownPositionAsync: jest.fn().mockResolvedValue(null),
+  getCurrentPositionAsync: jest.fn().mockResolvedValue(null),
+  startGeofencingAsync: jest.fn().mockResolvedValue(undefined),
+  stopGeofencingAsync: jest.fn().mockResolvedValue(undefined),
+  hasStartedGeofencingAsync: jest.fn().mockResolvedValue(false),
+}));
+jest.mock('expo-task-manager', () => ({
+  defineTask: jest.fn(),
+  isTaskDefined: jest.fn().mockReturnValue(false),
+}));
+jest.mock('expo-notifications', () => ({
+  AndroidImportance: { HIGH: 4 },
+  setNotificationChannelAsync: jest.fn().mockResolvedValue(null),
+  setNotificationHandler: jest.fn(),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  scheduleNotificationAsync: jest.fn().mockResolvedValue('n1'),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  getLastNotificationResponseAsync: jest.fn().mockResolvedValue(null),
+  clearLastNotificationResponse: jest.fn(),
+}));

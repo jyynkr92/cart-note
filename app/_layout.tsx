@@ -11,6 +11,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { AuthProvider, useAuth } from '@/src/auth/AuthProvider';
+// 백그라운드 지오펜스 작업은 모듈 최상위에서 정의돼야 한다(headless 실행 시 번들 로드만으로 등록).
+import '@/src/geofence/geofence-task';
+import {
+  setupNotificationHandler,
+  useNotificationResponses,
+} from '@/src/geofence/notification-route';
 import {
   persistOptions,
   queryClient,
@@ -20,6 +26,7 @@ import {
 import { ToastHost } from '@/src/lib/toast';
 
 setupOnlineManager();
+setupNotificationHandler();
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -43,6 +50,8 @@ function CacheOwnerGuard() {
 
 function RootNavigator() {
   const { loading } = useAuth();
+  // 알림 탭은 여기서 기록만 하고, 실제 이동은 (app) 가드가 ready가 된 뒤 (app)/_layout이 한다.
+  useNotificationResponses();
 
   if (loading) return null;
 

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
+import { resetGeofencing } from '@/src/geofence/sync-geofences';
 import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { clearUserCache } from '@/src/lib/query-client';
 import { supabase } from '@/src/lib/supabase';
@@ -45,6 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_OUT') {
         void clearUserCache().catch(() => {});
         void clearCurrentGroup();
+        // 로그아웃한 기기가 이전 사용자의 지점/메타로 지오펜스를 계속 돌리지 않게 멈추고 지운다.
+        void resetGeofencing();
       }
       setSession(next);
       setLoading(false);

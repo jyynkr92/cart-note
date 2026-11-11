@@ -8,7 +8,12 @@
     "scheme": "cartnote",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,7 +37,17 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "등록한 마트 근처에 가면 살 것을 알려 드리기 위해 앱을 사용하지 않을 때도 위치를 확인해요.",
+          "locationWhenInUsePermission": "가까운 마트를 먼저 알림 대상으로 고르기 위해 현재 위치를 확인해요.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
