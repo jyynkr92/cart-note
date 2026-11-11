@@ -23,6 +23,7 @@ jest.mock('expo-router', () => {
 jest.mock('@/src/lib/supabase', () => ({ supabase: {} }));
 jest.mock('@/src/lib/toast', () => ({ toast: { error: jest.fn() } }));
 jest.mock('@/src/items/item-api', () => ({}));
+jest.mock('@/src/realtime/use-family-realtime', () => ({ useFamilyRealtime: jest.fn() }));
 jest.mock('@/src/auth/AuthProvider', () => ({
   useAuth: () => ({ session: { user: { id: 'u1' } }, loading: false }),
 }));

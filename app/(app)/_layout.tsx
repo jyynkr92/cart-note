@@ -4,14 +4,18 @@ import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { useCurrentFamily } from '@/src/groups/use-groups';
 import { useIsOnline } from '@/src/lib/use-online';
 import { useOnboarding } from '@/src/onboarding/use-onboarding';
+import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
   const { step, pendingInvite, error, retry } = useOnboarding(
     loading ? null : (session?.user.id ?? null)
   );
+  const family = useCurrentFamily();
+  useFamilyRealtime(step === 'ready' ? (family?.id ?? null) : null);
 
   if (loading) return <Loading />;
   if (!session) return <Redirect href="/login" />;

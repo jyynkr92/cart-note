@@ -21,6 +21,7 @@ jest.mock('@/src/groups/group-api', () => ({
   createFamily: jest.fn(),
   fetchMyFamilies: jest.fn(),
 }));
+jest.mock('@/src/realtime/use-family-realtime', () => ({ useFamilyRealtime: jest.fn() }));
 jest.mock('@/src/onboarding/pending-invite', () => ({ getPendingInvite: jest.fn() }));
 jest.mock('@/src/onboarding/profile-api', () => ({ hasProfile: jest.fn() }));
 
