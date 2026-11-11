@@ -2,14 +2,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
 import { fetchOpenCount } from '@/src/geofence/geofence-api';
-import { getLastNotified, setGroupCount, setOpenCounts, setRegionMeta } from '@/src/geofence/geofence-store';
+import {
+  getLastNotified,
+  getRegionFingerprint,
+  setGroupCount,
+  setOpenCounts,
+  setRegionFingerprint,
+  setRegionMeta,
+} from '@/src/geofence/geofence-store';
 import { GEOFENCE_TASK, onGeofenceEvent } from '@/src/geofence/geofence-task';
 import { GEOFENCE_CHANNEL_ID, requestNearbyAlertPermissions } from '@/src/geofence/permissions';
 import { supabase } from '@/src/lib/supabase';
 import * as Location from 'expo-location';
 
+// storageKey 필드가 없는 auth 목: 세션 판단은 내보낸 AUTH_STORAGE_KEY 상수만 써야 한다.
 jest.mock('@/src/lib/supabase', () => ({
-  supabase: { auth: { storageKey: 'sb-test-auth-token', getSession: jest.fn() } },
+  AUTH_STORAGE_KEY: 'sb-test-auth-token',
+  supabase: { auth: { getSession: jest.fn() } },
 }));
 jest.mock('@/src/geofence/geofence-api', () => ({ fetchOpenCount: jest.fn() }));
 
@@ -110,6 +119,23 @@ describe('onGeofenceEvent', () => {
     await onGeofenceEvent(body(Location.GeofencingEventType.Exit));
     await onGeofenceEvent(body(Location.GeofencingEventType.Enter, 'r1', new Error('x')));
     expect(schedule).not.toHaveBeenCalled();
+  });
+
+  it('clears the registration fingerprint on a task error so the next sync re-registers', async () => {
+    await setRegionFingerprint('fp1');
+    await onGeofenceEvent(body(Location.GeofencingEventType.Enter, 'r1', new Error('os')));
+    expect(await getRegionFingerprint()).toBeNull();
+    expect(schedule).not.toHaveBeenCalled();
+  });
+
+  it('never rejects when clearing the fingerprint fails', async () => {
+    // 동기적으로 던지면 setRegionFingerprint 자체가 reject된다.
+    (AsyncStorage.removeItem as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('disk');
+    });
+    await expect(
+      onGeofenceEvent(body(Location.GeofencingEventType.Enter, 'r1', new Error('os')))
+    ).resolves.toBeUndefined();
   });
 
   it('does not notify when signed out', async () => {

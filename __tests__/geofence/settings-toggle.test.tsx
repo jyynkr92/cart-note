@@ -3,19 +3,27 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { AppState, Linking } from 'react-native';
 import { NearbyAlertToggle } from '@/src/geofence/NearbyAlertToggle';
 import { getEnabled, setEnabled } from '@/src/geofence/geofence-store';
-import { requestNearbyAlertPermissions } from '@/src/geofence/permissions';
+import {
+  hasBackgroundLocationPermission,
+  requestNearbyAlertPermissions,
+} from '@/src/geofence/permissions';
 import { syncGeofences } from '@/src/geofence/sync-geofences';
 
-jest.mock('@/src/geofence/permissions', () => ({ requestNearbyAlertPermissions: jest.fn() }));
+jest.mock('@/src/geofence/permissions', () => ({
+  requestNearbyAlertPermissions: jest.fn(),
+  hasBackgroundLocationPermission: jest.fn(),
+}));
 jest.mock('@/src/geofence/sync-geofences', () => ({
   syncGeofences: jest.fn().mockResolvedValue(undefined),
 }));
 
 const request = requestNearbyAlertPermissions as jest.Mock;
 const sync = syncGeofences as jest.Mock;
+const hasPermission = hasBackgroundLocationPermission as jest.Mock;
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  hasPermission.mockResolvedValue(true);
   await AsyncStorage.clear();
 });
 afterEach(async () => {
@@ -76,7 +84,7 @@ it('is disabled until the saved setting is loaded', async () => {
 it('re-reads the setting when the app returns to the foreground and removes the listener', async () => {
   let handler: ((s: string) => void) | undefined;
   const remove = jest.fn();
-  const add = jest.spyOn(AppState, 'addEventListener').mockImplementation((_, h) => {
+  jest.spyOn(AppState, 'addEventListener').mockImplementationOnce((_, h) => {
     handler = h as never;
     return { remove } as never;
   });
@@ -88,5 +96,28 @@ it('re-reads the setting when the app returns to the foreground and removes the 
   await waitFor(async () => expect(await toggle()).not.toBeChecked());
   await unmount();
   expect(remove).toHaveBeenCalled();
-  add.mockRestore();
+});
+
+it('shows the denied state when permission was revoked while in the background', async () => {
+  let handler: ((s: string) => void) | undefined;
+  // RN 목의 addEventListener는 이미 jest.fn이라 mockRestore 대신 한 번만 바꾼다.
+  jest.spyOn(AppState, 'addEventListener').mockImplementationOnce((_, h) => {
+    handler = h as never;
+    return { remove: jest.fn() } as never;
+  });
+  await setEnabled(true);
+  await render(<NearbyAlertToggle />);
+  await waitFor(async () => expect(await toggle()).toBeChecked());
+  expect(screen.queryByText('위치 권한이 필요해요')).toBeNull();
+  hasPermission.mockResolvedValue(false); // 시스템 설정에서 위치 권한을 끔
+  await act(async () => handler?.('active'));
+  expect(await screen.findByText('위치 권한이 필요해요')).toBeTruthy();
+  expect(screen.getByText('설정 열기')).toBeTruthy();
+});
+
+it('does not warn about permissions when alerts were never turned on', async () => {
+  hasPermission.mockResolvedValue(false);
+  await render(<NearbyAlertToggle />);
+  expect(await toggle()).not.toBeChecked();
+  expect(screen.queryByText('위치 권한이 필요해요')).toBeNull();
 });

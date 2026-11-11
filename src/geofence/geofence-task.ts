@@ -2,8 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
-import { supabase } from '@/src/lib/supabase';
+import { AUTH_STORAGE_KEY } from '@/src/lib/supabase';
 import { fetchOpenCount } from './geofence-api';
+import { setRegionFingerprint } from './geofence-store';
 import { handleEnter } from './handle-enter';
 import { GEOFENCE_CHANNEL_ID } from './permissions';
 
@@ -17,9 +18,7 @@ type GeofenceEvent = { eventType: Location.GeofencingEventType; region: Location
  * 로그아웃은 이 키를 지우고 regionMeta도 비우므로 로그아웃 사용자는 여전히 알림을 받지 않는다.
  */
 async function hasSession(): Promise<boolean> {
-  const key = (supabase.auth as unknown as { storageKey?: string }).storageKey;
-  if (!key) return false;
-  const raw = await AsyncStorage.getItem(key);
+  const raw = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
   if (!raw) return false;
   try {
     const stored = JSON.parse(raw) as { refresh_token?: unknown } | null;
@@ -40,7 +39,16 @@ async function processEvent({
   data,
   error,
 }: TaskManager.TaskManagerTaskBody<GeofenceEvent>): Promise<void> {
-  if (error || !data) return;
+  if (error) {
+    // OS가 지오펜싱을 멈췄을 수 있다(권한 회수 등). 지문을 지워 다음 동기화가 다시 등록하게 한다.
+    try {
+      await setRegionFingerprint(null);
+    } catch {
+      // 백그라운드 작업은 OS로 오류를 던지지 않는다.
+    }
+    return;
+  }
+  if (!data) return;
   if (data.eventType !== Location.GeofencingEventType.Enter) return;
   const regionId = data.region?.identifier;
   if (!regionId) return;

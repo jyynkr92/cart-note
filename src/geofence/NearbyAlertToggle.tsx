@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Pressable, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Text } from '@/components/ui/text';
 import { getEnabled, setEnabled } from './geofence-store';
-import { requestNearbyAlertPermissions } from './permissions';
+import { hasBackgroundLocationPermission, requestNearbyAlertPermissions } from './permissions';
 import { syncGeofences } from './sync-geofences';
 
 const LABEL = '근처 마트 알림';
@@ -15,17 +15,25 @@ export function NearbyAlertToggle() {
   const [on, setOn] = useState<boolean | null>(null);
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const onRef = useRef<boolean | null>(null);
+  onRef.current = on;
 
   useEffect(() => {
     let alive = true;
-    const load = () =>
-      void getEnabled().then((v) => {
-        if (alive) setOn(v);
-      });
-    load();
-    // 권한 철회로 동기화가 설정을 끈 경우 등, 포그라운드 복귀 때 다시 읽는다.
+    const load = async () => {
+      const wasOn = onRef.current === true;
+      const v = await getEnabled();
+      if (!alive) return;
+      setOn(v);
+      // 켜 둔 상태에서 시스템 설정으로 위치 권한을 끄면(동기화가 설정을 꺼도) 거부 안내를 보여 준다.
+      if (!v && !wasOn) return;
+      const ok = await hasBackgroundLocationPermission();
+      if (alive) setDenied(!ok);
+    };
+    void load();
+    // 권한 철회로 동기화가 설정을 끈 경우 등, 포그라운드 복귀 때 설정과 권한을 다시 읽는다.
     const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') load();
+      if (s === 'active') void load();
     });
     return () => {
       alive = false;
