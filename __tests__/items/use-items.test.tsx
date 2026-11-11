@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
+import { disposeClient } from '@/test-utils/dispose-client';
 import * as api from '@/src/items/item-api';
 import type { Item } from '@/src/items/item-api';
 import {
@@ -9,6 +10,7 @@ import {
   useClearList,
   useMoveItems,
   useToggleItem,
+  useUpdateItem,
 } from '@/src/items/use-items';
 import { createQueryClient } from '@/src/lib/query-client';
 import { qk } from '@/src/lib/query-keys';
@@ -56,7 +58,7 @@ beforeEach(() => {
     if (jest.isMockFunction(fn)) fn.mockResolvedValue(undefined as never);
 });
 
-afterEach(() => client.clear());
+afterEach(() => disposeClient(client));
 
 it('does not run a mutation for a blank name', async () => {
   const { result } = await renderHook(() => useAddItem(), { wrapper });
@@ -111,6 +113,43 @@ it('toggles optimistically, setting and clearing done_at', async () => {
   expect(mocked.updateItem).toHaveBeenCalledWith('a', { is_done: true, done_at: done.done_at });
 });
 
+it('uses one done_at for the optimistic cache and the api call', async () => {
+  const a = item('a');
+  client.setQueryData(qk.items('l1'), [a]);
+  jest.useFakeTimers({
+    now: new Date('2026-02-01T00:00:00.000Z'),
+    doNotFake: [
+      'setTimeout',
+      'clearTimeout',
+      'setInterval',
+      'clearInterval',
+      'setImmediate',
+      'clearImmediate',
+      'nextTick',
+      'queueMicrotask',
+      'performance',
+      'hrtime',
+    ],
+  });
+  try {
+    // 낙관적 반영 직후 시계를 앞으로 보낸다: mutationFn이 시간을 다시 계산하면 값이 달라진다.
+    const orig = client.setQueryData.bind(client);
+    jest.spyOn(client, 'setQueryData').mockImplementation(((...args: Parameters<typeof orig>) => {
+      const r = orig(...args);
+      jest.setSystemTime(new Date('2026-02-01T00:00:05.000Z'));
+      return r;
+    }) as typeof client.setQueryData);
+    const { result } = await renderHook(() => useToggleItem(), { wrapper });
+    await act(async () => {
+      await result.current.mutateAsync({ item: a });
+    });
+    const [done] = client.getQueryData<Item[]>(qk.items('l1'))!;
+    expect(mocked.updateItem).toHaveBeenCalledWith('a', { is_done: true, done_at: done.done_at });
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
 it('moves items out of the source cache and into the target cache', async () => {
   client.setQueryData(qk.items('l1'), [item('a'), item('b')]);
   client.setQueryData(qk.items('l2'), [item('c', { list_id: 'l2' })]);
@@ -146,4 +185,16 @@ it('clears the whole list from the cache', async () => {
   });
   expect(client.getQueryData(qk.items('l1'))).toEqual([]);
   expect(mocked.clearListItems).toHaveBeenCalledWith('l1');
+});
+
+it('ignores a whitespace-only item name on update', async () => {
+  client.setQueryData(qk.items('l1'), [item('a')]);
+  const { result } = await renderHook(() => useUpdateItem(), { wrapper });
+  await act(async () => {
+    result.current.mutate({ id: 'a', name: '  ' });
+    await result.current.mutateAsync({ id: 'a', name: '\t' });
+  });
+  expect(mocked.updateItem).not.toHaveBeenCalled();
+  expect(client.getQueryData<Item[]>(qk.items('l1'))![0].name).toBe('a');
+  expect(client.getMutationCache().getAll()).toHaveLength(0);
 });

@@ -1,14 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClientProvider, onlineManager } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react-native';
 import { createElement, type ReactNode } from 'react';
 import {
   persistQueryClientRestore,
   persistQueryClientSave,
 } from '@tanstack/react-query-persist-client';
+import { disposeClient } from '@/test-utils/dispose-client';
 import * as itemApi from '@/src/items/item-api';
 import type { Item } from '@/src/items/item-api';
-import { useClearList, useMoveItems } from '@/src/items/use-items';
+import { useClearList, useDeleteItems, useItems, useMoveItems } from '@/src/items/use-items';
 import {
   clearUserCache,
   createQueryClient as createRawQueryClient,
@@ -37,8 +38,10 @@ const createQueryClient = () => {
   clients.push(c);
   return c;
 };
-afterEach(() => {
-  for (const c of clients.splice(0)) c.clear();
+afterEach(async () => {
+  // 훅을 먼저 언마운트해야 observer 제거가 dispose 이후에 gc 타이머를 다시 만들지 않는다.
+  await cleanup();
+  for (const c of clients.splice(0)) disposeClient(c);
 });
 
 const item = (id: string, listId = 'l1'): Item => ({
@@ -93,7 +96,7 @@ describe('offline queue (Review Focus 5)', () => {
       persister,
       dehydrateOptions: persistOptions.dehydrateOptions,
     });
-    first.clear();
+    disposeClient(first);
 
     // 앱 재시작: 새 QueryClient로 복원
     const second = createQueryClient();
@@ -110,7 +113,67 @@ describe('offline queue (Review Focus 5)', () => {
     expect(calls).toEqual(['move', 'clear']);
     expect(api.moveItems).toHaveBeenCalledWith('l2', ['a']);
     expect(api.clearListItems).toHaveBeenCalledWith('l2');
-    second.clear();
+    disposeClient(second);
+  });
+});
+
+describe('queue drain reconciliation', () => {
+  it.each([
+    ['fails', true],
+    ['succeeds', false],
+  ])('reconciles every touched list when the first resumed mutation %s', async (_n, fails) => {
+    onlineManager.setOnline(false);
+    const first = createQueryClient();
+    first.setQueryData(qk.items('l1'), [item('a'), item('b')]);
+    first.setQueryData(qk.items('l2'), [item('c', 'l2')]);
+    const w1 = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: first }, children);
+    const del = await renderHook(() => useDeleteItems(), { wrapper: w1 });
+    const clear = await renderHook(() => useClearList(), { wrapper: w1 });
+    await act(async () => {
+      del.result.current.mutate({ listId: 'l1', ids: ['a'] });
+      clear.result.current.mutate({ listId: 'l2' });
+    });
+    await waitFor(() =>
+      expect(
+        first
+          .getMutationCache()
+          .getAll()
+          .filter((m) => m.state.isPaused)
+      ).toHaveLength(2)
+    );
+    await persistQueryClientSave({
+      queryClient: first,
+      persister,
+      dehydrateOptions: persistOptions.dehydrateOptions,
+    });
+    disposeClient(first);
+
+    const second = createQueryClient();
+    await persistQueryClientRestore({ queryClient: second, persister });
+    const w2 = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: second }, children);
+    // 재연결 자동 refetch가 결과를 가리지 않도록 끈다(큐 정리 로직만 검증).
+    second.setQueryDefaults(['items'], { refetchOnReconnect: false });
+    const l1 = await renderHook(() => useItems('l1'), { wrapper: w2 });
+    const l2 = await renderHook(() => useItems('l2'), { wrapper: w2 });
+
+    // 서버 상태: 실패하면 a, b가 남고, 성공해도 다른 멤버가 z를 추가해 둔 상태. l2는 비어 있다.
+    const server: Record<string, Item[]> = {
+      l1: fails ? [item('a'), item('b')] : [item('b'), item('z')],
+      l2: [],
+    };
+    api.fetchItems.mockImplementation(async (id: string) => server[id]);
+    if (fails) api.deleteItems.mockRejectedValue(new Error('rls'));
+    onlineManager.setOnline(true);
+    await act(async () => {
+      await second.resumePausedMutations();
+    });
+
+    const expected = fails ? ['a', 'b'] : ['b', 'z'];
+    await waitFor(() => expect(l1.result.current.data!.map((i) => i.id).sort()).toEqual(expected));
+    expect(l2.result.current.data).toEqual([]);
+    disposeClient(second);
   });
 });
 
@@ -141,6 +204,11 @@ describe('privacy: persisted cache', () => {
     client.setQueryData(qk.items('l1'), [item('b')]);
     await syncCacheOwner(client, null);
     expect(client.getQueryData(qk.items('l1'))).toBeUndefined();
+
+    // 로그아웃 뒤 같은 사용자의 정상 로그인은 캐시를 지우지 않는다.
+    client.setQueryData(qk.items('l1'), [item('c')]);
+    await syncCacheOwner(client, 'u2');
+    expect(client.getQueryData(qk.items('l1'))).toBeDefined();
   });
 
   it('does not persist onboarding state', () => {

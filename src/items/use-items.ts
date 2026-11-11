@@ -1,6 +1,5 @@
 import { useMutation, useQuery, type QueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
-import { invalidateWhenIdle, newId, QUEUE_SCOPE } from '@/src/lib/mutation-utils';
+import { invalidateWhenIdle, newId, QUEUE_SCOPE, withPrepare } from '@/src/lib/mutation-utils';
 import { mk, qk } from '@/src/lib/query-keys';
 import { normalizeName } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
@@ -18,7 +17,7 @@ export function useItems(listId: string | null | undefined) {
 // ---- 변수 타입(모두 직렬화 가능해야 한다: 오프라인 큐로 영속화됨) ----
 export type AddItemInput = { listId: string; familyId: string; name: string };
 type AddItemVars = AddItemInput & { id: string; createdAt: string };
-type ToggleVars = { item: Item };
+type ToggleVars = { item: Item; isDone: boolean; doneAt: string | null };
 export type UpdateItemInput = { id: string; name?: string; note?: string | null };
 type MoveVars = { fromListId: string; toListId: string; ids: string[] };
 
@@ -56,6 +55,8 @@ type Spec<V> = {
   error: string;
 };
 
+// 참고: 실행 중(아직 일시정지되지 않은) mutation은 앱이 강제 종료되면 유실된다.
+// 낙관적 값은 다음 실행 때 서버 상태로 다시 맞춰진다(마지막 쓰기 우선 정책으로 수용).
 function define<V>(qc: QueryClient, spec: Spec<V>) {
   qc.setMutationDefaults(spec.key, {
     scope: QUEUE_SCOPE,
@@ -66,15 +67,13 @@ function define<V>(qc: QueryClient, spec: Spec<V>) {
       return ctx;
     },
     // 재시작 후 재개된 mutation은 context가 없다 → 롤백 대신 무효화로 서버 값에 맞춘다.
-    onError: (_e: unknown, _v: V, ctx: Ctx | undefined) => {
+    onError: (_e: unknown, v: V, ctx: Ctx | undefined) => {
       rollback(qc, ctx);
+      // 실패한 mutation이 건드린 목록은 큐 상태와 무관하게 항상 서버 값으로 맞춘다.
+      for (const id of spec.lists(qc, v)) void qc.invalidateQueries({ queryKey: qk.items(id) });
       toast.error(spec.error);
     },
-    onSettled: (_d: unknown, _e: unknown, v: V) =>
-      invalidateWhenIdle(
-        qc,
-        spec.lists(qc, v).map((id) => qk.items(id))
-      ),
+    onSettled: () => invalidateWhenIdle(qc),
   });
 }
 
@@ -110,21 +109,12 @@ export function registerItemMutations(qc: QueryClient) {
 
   define<ToggleVars>(qc, {
     key: mk.toggleItem,
-    run: ({ item }) => {
-      const is_done = !item.is_done;
-      return api.updateItem(item.id, {
-        is_done,
-        done_at: is_done ? new Date().toISOString() : null,
-      });
-    },
+    run: ({ item, isDone, doneAt }) => api.updateItem(item.id, { is_done: isDone, done_at: doneAt }),
     lists: (_qc, v) => [v.item.list_id],
-    apply: (qc, { item }) => {
-      const is_done = !item.is_done;
-      const done_at = is_done ? new Date().toISOString() : null;
+    apply: (qc, { item, isDone, doneAt }) =>
       patchList(qc, item.list_id, (old) =>
-        old.map((i) => (i.id === item.id ? { ...i, is_done, done_at } : i))
-      );
-    },
+        old.map((i) => (i.id === item.id ? { ...i, is_done: isDone, done_at: doneAt } : i))
+      ),
     error: '변경하지 못했어요',
   });
 
@@ -186,60 +176,35 @@ export function registerItemMutations(qc: QueryClient) {
 // ---- 훅 ----
 export function useAddItem() {
   const m = useMutation<void, Error, AddItemVars, Ctx>({ mutationKey: mk.addItem });
-  const { mutate, mutateAsync } = m;
-  return useMemo(() => {
-    const prepare = (input: AddItemInput): AddItemVars | null => {
-      const name = normalizeName(input.name);
-      if (!name) return null; // 공백뿐인 이름은 저장하지 않는다
-      return { ...input, name, id: newId(), createdAt: new Date().toISOString() };
-    };
-    return {
-      ...m,
-      mutate: (input: AddItemInput) => {
-        const vars = prepare(input);
-        if (vars) mutate(vars);
-      },
-      mutateAsync: async (input: AddItemInput) => {
-        const vars = prepare(input);
-        if (vars) await mutateAsync(vars);
-      },
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m, mutate, mutateAsync]);
+  return withPrepare(m, (input: AddItemInput): AddItemVars | null => {
+    const name = normalizeName(input.name);
+    if (!name) return null; // 공백뿐인 이름은 저장하지 않는다
+    return { ...input, name, id: newId(), createdAt: new Date().toISOString() };
+  });
 }
 
 export function useToggleItem() {
-  return useMutation<void, Error, ToggleVars, Ctx>({ mutationKey: mk.toggleItem });
+  const m = useMutation<void, Error, ToggleVars, Ctx>({ mutationKey: mk.toggleItem });
+  return withPrepare(m, ({ item }: { item: Item }): ToggleVars => {
+    const isDone = !item.is_done;
+    // 낙관적 값과 서버 값이 같도록 시각을 한 번만 계산해 변수에 담는다.
+    return { item, isDone, doneAt: isDone ? new Date().toISOString() : null };
+  });
 }
 
 export function useUpdateItem() {
   const m = useMutation<void, Error, UpdateItemInput, Ctx>({ mutationKey: mk.updateItem });
-  const { mutate, mutateAsync } = m;
-  return useMemo(() => {
-    const prepare = (input: UpdateItemInput): UpdateItemInput | null => {
-      const out: UpdateItemInput = { id: input.id };
-      if (input.name !== undefined) {
-        const name = normalizeName(input.name);
-        if (!name) return null; // 이름을 공백으로 바꾸는 수정은 무시
-        out.name = name;
-      }
-      if (input.note !== undefined)
-        out.note = input.note === null ? null : (normalizeName(input.note) ?? null);
-      return out;
-    };
-    return {
-      ...m,
-      mutate: (input: UpdateItemInput) => {
-        const vars = prepare(input);
-        if (vars) mutate(vars);
-      },
-      mutateAsync: async (input: UpdateItemInput) => {
-        const vars = prepare(input);
-        if (vars) await mutateAsync(vars);
-      },
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m, mutate, mutateAsync]);
+  return withPrepare(m, (input: UpdateItemInput): UpdateItemInput | null => {
+    const out: UpdateItemInput = { id: input.id };
+    if (input.name !== undefined) {
+      const name = normalizeName(input.name);
+      if (!name) return null; // 이름을 공백으로 바꾸는 수정은 무시
+      out.name = name;
+    }
+    if (input.note !== undefined)
+      out.note = input.note === null ? null : (normalizeName(input.note) ?? null);
+    return out;
+  });
 }
 
 export function useDeleteItems() {

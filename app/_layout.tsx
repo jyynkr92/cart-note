@@ -32,7 +32,10 @@ function CacheOwnerGuard() {
   const userId = session?.user.id ?? null;
   useEffect(() => {
     if (restoring || loading) return;
-    syncCacheOwner(queryClient, userId).catch(() => {});
+    // 소유자 확인이 끝난 뒤에만 대기 중인 mutation을 재개한다(다른 사용자의 큐가 실행되지 않도록).
+    syncCacheOwner(queryClient, userId)
+      .then(() => queryClient.resumePausedMutations())
+      .catch(() => {});
   }, [restoring, loading, userId]);
   return null;
 }
@@ -59,8 +62,7 @@ export default function RootLayout() {
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <PersistQueryClientProvider
         client={queryClient}
-        persistOptions={persistOptions}
-        onSuccess={() => void queryClient.resumePausedMutations()}>
+        persistOptions={persistOptions}>
         <AuthProvider>
           <CacheOwnerGuard />
           <RootNavigator />

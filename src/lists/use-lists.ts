@@ -1,6 +1,5 @@
 import { useMutation, useQuery, type QueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
-import { invalidateWhenIdle, newId, QUEUE_SCOPE } from '@/src/lib/mutation-utils';
+import { invalidateWhenIdle, newId, QUEUE_SCOPE, withPrepare } from '@/src/lib/mutation-utils';
 import { mk, qk } from '@/src/lib/query-keys';
 import { normalizeName } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
@@ -49,10 +48,11 @@ function define<V extends { familyId: string }>(
     },
     onError: (_e: unknown, v: V, ctx: Ctx | undefined) => {
       if (ctx?.prev) qc.setQueryData(qk.lists(v.familyId), ctx.prev);
+      void qc.invalidateQueries({ queryKey: qk.lists(v.familyId) });
       toast.error(spec.error);
     },
     onSuccess: (_d: unknown, v: V) => spec.after?.(qc, v),
-    onSettled: (_d: unknown, _e: unknown, v: V) => invalidateWhenIdle(qc, [qk.lists(v.familyId)]),
+    onSettled: () => invalidateWhenIdle(qc),
   });
 }
 
@@ -96,55 +96,25 @@ export function registerListMutations(qc: QueryClient) {
 
 export function useCreateList() {
   const m = useMutation<void, Error, CreateListVars, Ctx>({ mutationKey: mk.createList });
-  const { mutate, mutateAsync } = m;
-  return useMemo(() => {
-    const prepare = (input: CreateListInput): CreateListVars | null => {
-      const name = normalizeName(input.name);
-      if (!name) return null;
-      return {
-        id: newId(),
-        familyId: input.familyId,
-        name,
-        kind: input.kind ?? 'store',
-        createdAt: new Date().toISOString(),
-      };
-    };
+  return withPrepare(m, (input: CreateListInput): CreateListVars | null => {
+    const name = normalizeName(input.name);
+    if (!name) return null;
     return {
-      ...m,
-      mutate: (input: CreateListInput) => {
-        const vars = prepare(input);
-        if (vars) mutate(vars);
-      },
-      mutateAsync: async (input: CreateListInput) => {
-        const vars = prepare(input);
-        if (vars) await mutateAsync(vars);
-      },
+      id: newId(),
+      familyId: input.familyId,
+      name,
+      kind: input.kind ?? 'store',
+      createdAt: new Date().toISOString(),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m, mutate, mutateAsync]);
+  });
 }
 
 export function useRenameList() {
   const m = useMutation<void, Error, RenameVars, Ctx>({ mutationKey: mk.renameList });
-  const { mutate, mutateAsync } = m;
-  return useMemo(() => {
-    const prepare = (input: RenameVars): RenameVars | null => {
-      const name = normalizeName(input.name);
-      return name ? { ...input, name } : null;
-    };
-    return {
-      ...m,
-      mutate: (input: RenameVars) => {
-        const vars = prepare(input);
-        if (vars) mutate(vars);
-      },
-      mutateAsync: async (input: RenameVars) => {
-        const vars = prepare(input);
-        if (vars) await mutateAsync(vars);
-      },
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [m, mutate, mutateAsync]);
+  return withPrepare(m, (input: RenameVars): RenameVars | null => {
+    const name = normalizeName(input.name);
+    return name ? { ...input, name } : null;
+  });
 }
 
 export function useDeleteList() {
