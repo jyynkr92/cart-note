@@ -185,6 +185,47 @@ it('does not run concurrently with itself and coalesces calls into one trailing 
   expect(L.startGeofencingAsync).toHaveBeenCalledTimes(2);
 });
 
+it('does not restart geofencing when the picked regions are unchanged, but refreshes meta and counts', async () => {
+  await setEnabled(true);
+  await syncGeofences();
+  expect(L.startGeofencingAsync).toHaveBeenCalledTimes(1);
+
+  L.hasStartedGeofencingAsync.mockResolvedValue(true);
+  locations.mockResolvedValue([loc(0, { place_name: '새 이름' })]);
+  openCounts.mockResolvedValue({ L0: 9 });
+  await syncGeofences();
+  expect(L.startGeofencingAsync).toHaveBeenCalledTimes(1);
+  expect((await getRegionMeta()).r0.placeName).toBe('새 이름');
+  expect(await getCachedOpenCount('L0')).toBe(9);
+
+  // 반경이 바뀌면 다시 등록한다.
+  locations.mockResolvedValue([loc(0, { radius_m: 500 })]);
+  await syncGeofences();
+  expect(L.startGeofencingAsync).toHaveBeenCalledTimes(2);
+});
+
+it('restarts unchanged regions when nothing is registered (e.g. after a reboot or stop)', async () => {
+  await setEnabled(true);
+  await syncGeofences();
+  L.hasStartedGeofencingAsync.mockResolvedValue(false);
+  await syncGeofences();
+  expect(L.startGeofencingAsync).toHaveBeenCalledTimes(2);
+});
+
+it('stops again if sign-out happened while start was in flight', async () => {
+  await setEnabled(true);
+  let finish!: () => void;
+  L.startGeofencingAsync.mockReturnValueOnce(new Promise<void>((r) => (finish = r)));
+  const running = syncGeofences();
+  await waitFor(() => expect(L.startGeofencingAsync).toHaveBeenCalled());
+  await resetGeofencing();
+  L.stopGeofencingAsync.mockClear();
+  L.hasStartedGeofencingAsync.mockResolvedValue(true);
+  finish();
+  await running;
+  expect(L.stopGeofencingAsync).toHaveBeenCalledWith(GEOFENCE_TASK);
+});
+
 describe('resetGeofencing (sign-out)', () => {
   it('stops geofencing and clears the per-user data', async () => {
     await setEnabled(true);

@@ -5,9 +5,11 @@ import { fetchOpenCounts } from './geofence-api';
 import {
   clearUserGeofenceData,
   getEnabled,
+  getRegionFingerprint,
   setEnabled,
   setGroupCount,
   setOpenCounts,
+  setRegionFingerprint,
   setRegionMeta,
   type RegionMeta,
 } from './geofence-store';
@@ -127,25 +129,40 @@ async function run(opts: SyncOptions): Promise<void> {
   }
   if (stale()) return;
 
+  const regions = picked.map((l) => ({
+    identifier: l.id,
+    latitude: l.lat,
+    longitude: l.lng,
+    radius: l.radius_m ?? DEFAULT_RADIUS_M,
+    notifyOnEnter: true,
+    notifyOnExit: false,
+  }));
+  const fingerprint = regions
+    .map((r) => `${r.identifier}:${r.latitude}:${r.longitude}:${r.radius}`)
+    .sort()
+    .join('|');
+
   // 등록 직후 진입 이벤트가 와도 메타를 찾을 수 있도록 먼저 저장한다.
   await setRegionMeta(meta);
+  if (stale()) return;
   if (counts) await setOpenCounts(counts);
   if (stale()) return;
+
+  // 같은 region으로 다시 start하면 iOS가 안에 있는 region마다 Enter를 다시 보낸다 → 바뀌었을 때만 등록한다.
+  if (fingerprint === (await getRegionFingerprint()) && (await isRegistered())) return;
+  if (stale()) return;
   try {
-    await Location.startGeofencingAsync(
-      GEOFENCE_TASK,
-      picked.map((l) => ({
-        identifier: l.id,
-        latitude: l.lat,
-        longitude: l.lng,
-        radius: l.radius_m ?? DEFAULT_RADIUS_M,
-        notifyOnEnter: true,
-        notifyOnExit: false,
-      }))
-    );
+    await Location.startGeofencingAsync(GEOFENCE_TASK, regions);
   } catch {
     // 네이티브 오류: 다음 동기화(포그라운드 복귀 등)에서 다시 시도한다.
+    return;
   }
+  if (stale()) {
+    // start 도중 로그아웃했다: 방금 등록한 region을 다시 멈춘다.
+    await stopIfRegistered();
+    return;
+  }
+  await setRegionFingerprint(fingerprint);
 }
 
 let running: Promise<void> | null = null;

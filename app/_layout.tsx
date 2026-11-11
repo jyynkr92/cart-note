@@ -11,7 +11,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { AuthProvider, useAuth } from '@/src/auth/AuthProvider';
-// 백그라운드 지오펜스 작업은 모듈 최상위에서 정의돼야 한다(headless 실행 시 번들 로드만으로 등록).
+// 지오펜스 작업 정의는 index.ts 진입점이 먼저 등록한다. 여기서의 import는 중복이어도 무해하다(모듈은 한 번만 평가).
 import '@/src/geofence/geofence-task';
 import {
   setupNotificationHandler,

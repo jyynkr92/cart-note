@@ -10,6 +10,7 @@ const KEYS = {
   lastNotified: 'geofence:lastNotified',
   openCounts: 'geofence:openCounts',
   groupCount: 'geofence:groupCount',
+  fingerprint: 'geofence:fingerprint',
 } as const;
 
 export type RegionMeta = { listId: string; familyId: string; groupName: string; placeName: string };
@@ -80,6 +81,18 @@ export async function setGroupCount(n: number): Promise<void> {
   await writeJson(KEYS.groupCount, n);
 }
 
+/** 마지막으로 등록한 region 집합(id:lat:lng:radius). 같으면 다시 등록하지 않는다. */
+export async function getRegionFingerprint(): Promise<string | null> {
+  return AsyncStorage.getItem(KEYS.fingerprint).catch(() => null);
+}
+
+export async function setRegionFingerprint(fp: string | null): Promise<void> {
+  await (fp === null
+    ? AsyncStorage.removeItem(KEYS.fingerprint)
+    : AsyncStorage.setItem(KEYS.fingerprint, fp)
+  ).catch(() => {});
+}
+
 /** 로그아웃 시: 사용자별 데이터(메타, 개수 스냅샷, 알림 이력, 그룹 수)를 지운다. 켜기/끄기는 기기 설정이라 둔다. */
 export async function clearUserGeofenceData(): Promise<void> {
   await AsyncStorage.multiRemove([
@@ -87,5 +100,6 @@ export async function clearUserGeofenceData(): Promise<void> {
     KEYS.lastNotified,
     KEYS.openCounts,
     KEYS.groupCount,
+    KEYS.fingerprint,
   ]).catch(() => {});
 }

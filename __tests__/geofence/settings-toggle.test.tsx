@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Linking } from 'react-native';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { AppState, Linking } from 'react-native';
 import { NearbyAlertToggle } from '@/src/geofence/NearbyAlertToggle';
 import { getEnabled, setEnabled } from '@/src/geofence/geofence-store';
 import { requestNearbyAlertPermissions } from '@/src/geofence/permissions';
@@ -58,4 +58,35 @@ it('turns off without asking for permissions and syncs (stops geofencing)', asyn
   expect(request).not.toHaveBeenCalled();
   expect(await getEnabled()).toBe(false);
   expect(await toggle()).not.toBeChecked();
+});
+
+it('exposes a single accessible toggle', async () => {
+  await render(<NearbyAlertToggle />);
+  await toggle();
+  expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+});
+
+it('is disabled until the saved setting is loaded', async () => {
+  // async-storage 목의 getItem은 이미 jest.fn이라 spyOn/mockRestore를 쓰면 구현이 지워진다.
+  (AsyncStorage.getItem as jest.Mock).mockReturnValueOnce(new Promise(() => {}));
+  await render(<NearbyAlertToggle />);
+  expect(await toggle()).toBeDisabled();
+});
+
+it('re-reads the setting when the app returns to the foreground and removes the listener', async () => {
+  let handler: ((s: string) => void) | undefined;
+  const remove = jest.fn();
+  const add = jest.spyOn(AppState, 'addEventListener').mockImplementation((_, h) => {
+    handler = h as never;
+    return { remove } as never;
+  });
+  await setEnabled(true);
+  const { unmount } = await render(<NearbyAlertToggle />);
+  await waitFor(async () => expect(await toggle()).toBeChecked());
+  await setEnabled(false); // 예: 권한 철회로 동기화가 끈 경우
+  await act(async () => handler?.('active'));
+  await waitFor(async () => expect(await toggle()).not.toBeChecked());
+  await unmount();
+  expect(remove).toHaveBeenCalled();
+  add.mockRestore();
 });

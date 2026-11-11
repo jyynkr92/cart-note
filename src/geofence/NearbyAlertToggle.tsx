@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { AppState, Linking, Pressable, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Text } from '@/components/ui/text';
@@ -11,17 +11,25 @@ const LABEL = '근처 마트 알림';
 
 /** 설정 화면의 "근처 마트 알림"(이 기기) 켜기/끄기. 권한이 거부되면 꺼진 채로 시스템 설정 이동을 안내한다. */
 export function NearbyAlertToggle() {
-  const [on, setOn] = useState(false);
+  // null = 저장값을 읽기 전(그 사이 누르면 잘못된 방향으로 바뀌므로 비활성).
+  const [on, setOn] = useState<boolean | null>(null);
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    void getEnabled().then((v) => {
-      if (alive) setOn(v);
+    const load = () =>
+      void getEnabled().then((v) => {
+        if (alive) setOn(v);
+      });
+    load();
+    // 권한 철회로 동기화가 설정을 끈 경우 등, 포그라운드 복귀 때 다시 읽는다.
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') load();
     });
     return () => {
       alive = false;
+      sub.remove();
     };
   }, []);
 
@@ -44,19 +52,25 @@ export function NearbyAlertToggle() {
     }
   }
 
+  const disabled = busy || on === null;
   return (
     <View className="gap-2">
       <Pressable
         className="flex-row items-center gap-3"
+        role="checkbox"
+        aria-checked={on === true}
+        aria-disabled={disabled}
+        accessibilityLabel={LABEL}
+        accessibilityState={{ checked: on === true, disabled }}
         onPress={() => void change(!on)}
-        disabled={busy}>
-        <Checkbox
-          checked={on}
-          onCheckedChange={(v) => void change(v)}
-          disabled={busy}
-          aria-label={LABEL}
-          accessibilityLabel={LABEL}
-        />
+        disabled={disabled}>
+        {/* 시각 표시만 한다. 접근성/터치 대상은 바깥 행 하나다. */}
+        <View
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants">
+          <Checkbox checked={on === true} onCheckedChange={() => {}} disabled={disabled} />
+        </View>
         <View className="flex-1">
           <Text>{LABEL}</Text>
           <Text className="text-sm text-muted-foreground">

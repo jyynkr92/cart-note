@@ -51,6 +51,11 @@ describe('notificationText', () => {
       notificationText({ groupName: '부모님댁', placeName: '코스트코 양재점', count: 6, groupCount: 1 })
     ).toBe('코스트코 양재점 근처예요 · 사야 할 것 6개');
   });
+  it('keeps the group prefix with several groups even when the count is unknown', () => {
+    expect(
+      notificationText({ groupName: '부모님댁', placeName: '코스트코 양재점', count: null, groupCount: 2 })
+    ).toBe('[부모님댁] 코스트코 양재점 근처예요');
+  });
   it('omits the count when unknown', () => {
     expect(
       notificationText({ groupName: '부모님댁', placeName: '코스트코 양재점', count: null, groupCount: 1 })

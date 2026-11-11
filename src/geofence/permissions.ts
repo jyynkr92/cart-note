@@ -2,6 +2,9 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+/** 진입 알림용 Android 채널(HIGH). 알림 예약 시 trigger.channelId로 같은 값을 쓴다. */
+export const GEOFENCE_CHANNEL_ID = 'default';
+
 async function granted(request: () => Promise<{ status: string }>): Promise<boolean> {
   try {
     return (await request()).status === 'granted';
@@ -15,7 +18,7 @@ export async function requestNearbyAlertPermissions(): Promise<'granted' | 'deni
   // Android 13+는 채널이 있어야 알림 권한 요청 창이 뜬다. 진입 알림도 이 기본 채널로 간다.
   if (Platform.OS === 'android') {
     try {
-      await Notifications.setNotificationChannelAsync('default', {
+      await Notifications.setNotificationChannelAsync(GEOFENCE_CHANNEL_ID, {
         name: '근처 마트 알림',
         importance: Notifications.AndroidImportance.HIGH,
       });
