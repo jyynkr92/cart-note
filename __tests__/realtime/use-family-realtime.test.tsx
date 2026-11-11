@@ -62,29 +62,37 @@ it('subscribes INSERT/UPDATE with family filter and DELETE without one', async (
   }
 });
 
-it('invalidates everything on every SUBSCRIBED, including the first', async () => {
+type Pred = { predicate: (q: { queryKey: unknown[] }) => boolean };
+
+it('invalidates everything but onboarding on every SUBSCRIBED, including the first', async () => {
   const spy = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
   await renderHook(() => useFamilyRealtime('f1'), { wrapper });
   statusCb('SUBSCRIBED');
   expect(spy).toHaveBeenCalledTimes(1);
-  expect(spy).toHaveBeenCalledWith();
+  const { predicate } = spy.mock.calls[0][0] as unknown as Pred;
+  expect(predicate({ queryKey: ['items', 'l1'] })).toBe(true);
+  expect(predicate({ queryKey: ['lists', 'f1'] })).toBe(true);
+  expect(predicate({ queryKey: ['locations', 'l1'] })).toBe(true);
+  expect(predicate({ queryKey: ['families'] })).toBe(true);
+  // 온보딩 재조회가 오프라인에서 실패하면 가드가 오류 화면으로 바뀌므로 건드리지 않는다.
+  expect(predicate({ queryKey: ['onboarding', 'u1'] })).toBe(false);
   statusCb('CHANNEL_ERROR');
   statusCb('SUBSCRIBED');
   expect(spy).toHaveBeenCalledTimes(2);
 });
 
-it('while mutations are pending, SUBSCRIBED skips items and lists queries', async () => {
+it('while mutations are pending, SUBSCRIBED skips optimistic items, lists and locations', async () => {
   const spy = jest.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
   jest.spyOn(client, 'isMutating').mockReturnValue(1);
   await renderHook(() => useFamilyRealtime('f1'), { wrapper });
   statusCb('SUBSCRIBED');
-  const { predicate } = spy.mock.calls[0][0] as unknown as {
-    predicate: (q: { queryKey: unknown[] }) => boolean;
-  };
+  const { predicate } = spy.mock.calls[0][0] as unknown as Pred;
   expect(predicate({ queryKey: ['items', 'l1'] })).toBe(false);
   expect(predicate({ queryKey: ['lists', 'f1'] })).toBe(false);
-  expect(predicate({ queryKey: ['locations', 'l1'] })).toBe(true);
+  expect(predicate({ queryKey: ['locations', 'l1'] })).toBe(false);
+  expect(predicate({ queryKey: ['onboarding', 'u1'] })).toBe(false);
   expect(predicate({ queryKey: ['allLocations'] })).toBe(true);
+  expect(predicate({ queryKey: ['families'] })).toBe(true);
 });
 
 it('waits for postgres_changes subscription confirmation', async () => {

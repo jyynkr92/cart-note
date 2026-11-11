@@ -10,6 +10,12 @@ it('walks through the steps', () => {
   expect(resolveOnboarding({ ...base, groupCount: 1 })).toBe('ready');
 });
 
-it('lets existing members stay ready despite a stale pending invite', () => {
-  expect(resolveOnboarding({ ...base, pendingInvite: '123456', groupCount: 2 })).toBe('ready');
+it('sends existing members with a pending invite to join first', () => {
+  expect(resolveOnboarding({ ...base, pendingInvite: '123456', groupCount: 2 })).toBe('join-pending');
+});
+
+it('asks for a profile before handling a pending invite', () => {
+  expect(resolveOnboarding({ ...base, hasProfile: false, pendingInvite: '123456', groupCount: 1 })).toBe(
+    'profile'
+  );
 });

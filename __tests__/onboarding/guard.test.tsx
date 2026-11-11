@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
+import { act, render, screen, waitFor } from '@testing-library/react-native';
 import { StrictMode, type ReactElement } from 'react';
 import AppLayout from '@/app/(app)/_layout';
 import { createFamily, fetchMyFamilies } from '@/src/groups/group-api';
@@ -42,6 +42,10 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   jest.clearAllMocks();
   (createFamily as jest.Mock).mockResolvedValue('f1');
+});
+afterEach(() => {
+  onlineManager.setOnline(true);
+  client.clear();
 });
 
 it('redirects to /profile without a profile', async () => {
@@ -109,4 +113,36 @@ it('moves from /profile to the next step after invalidation, without remounting'
   await client.invalidateQueries({ queryKey: qk.onboarding('u1') });
 
   expect(await screen.findByText('READY')).toBeTruthy();
+});
+
+it('resolves the new personal group as current after creating it', async () => {
+  set(true, null, 0);
+  const created = { id: 'f1', name: '내 장보기', created_at: '2026-01-01T00:00:00Z' };
+  (createFamily as jest.Mock).mockImplementation(async () => {
+    (fetchMyFamilies as jest.Mock).mockResolvedValue([created]);
+    return 'f1';
+  });
+  await renderWithClient(<AppLayout />);
+  expect(await screen.findByText('READY')).toBeTruthy();
+  await waitFor(() => expect(useFamilyRealtime).toHaveBeenLastCalledWith('f1'));
+});
+
+it('keeps the app when a background onboarding refetch fails', async () => {
+  set(true, null, 1);
+  await renderWithClient(<AppLayout />);
+  expect(await screen.findByText('READY')).toBeTruthy();
+  (hasProfile as jest.Mock).mockRejectedValue(new Error('offline'));
+  await act(() => client.refetchQueries({ queryKey: qk.onboarding('u1') }));
+  expect(client.getQueryState(qk.onboarding('u1'))?.status).toBe('error');
+  // 쿼리 알림은 다음 틱에 배치로 전달된다.
+  await act(() => new Promise((r) => setTimeout(r, 10)));
+  expect(screen.queryByText('연결을 확인해 주세요')).toBeNull();
+  expect(screen.getByText('READY')).toBeTruthy();
+});
+
+it('shows an offline message instead of a spinner when the first check is paused', async () => {
+  set(true, null, 1);
+  onlineManager.setOnline(false);
+  await renderWithClient(<AppLayout />);
+  expect(await screen.findByText('오프라인이라 확인할 수 없어요')).toBeTruthy();
 });

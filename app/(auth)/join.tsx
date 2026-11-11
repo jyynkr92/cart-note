@@ -13,10 +13,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { useCurrentGroupStore } from '@/src/groups/current-group-store';
 import { loadEmptySoloGroups } from '@/src/groups/empty-group-cleanup';
 import { GroupError, joinFamily, leaveFamily, type GroupErrorCode } from '@/src/groups/group-api';
 import { qk } from '@/src/lib/query-keys';
 import { normalizeInviteCode } from '@/src/lib/text';
+import { toast } from '@/src/lib/toast';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
 
 const ERROR_MESSAGES: Partial<Record<GroupErrorCode, string>> = {
@@ -30,6 +32,7 @@ export default function Join() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { session } = useAuth();
+  const { setFamilyId } = useCurrentGroupStore();
   const params = useLocalSearchParams<{ code?: string }>();
   const [code, setCode] = useState(() => normalizeInviteCode(params.code ?? '') ?? '');
   const [busy, setBusy] = useState(false);
@@ -74,13 +77,17 @@ export default function Join() {
     if (!current || busy) return;
     setBusy(true);
     try {
-      if (remove) await leaveFamily(current.id);
-    } catch {
-      // 정리는 부가 기능이라 실패해도 계속 진행한다.
+      try {
+        if (remove) await leaveFamily(current.id);
+      } catch {
+        // 정리는 부가 기능이라 실패해도 알리고 계속 진행한다.
+        toast.error('그룹을 삭제하지 못했어요');
+      }
+      setCleanup(rest);
+      if (!rest.length) await finish();
+    } finally {
+      setBusy(false);
     }
-    setCleanup(rest);
-    if (!rest.length) await finish();
-    setBusy(false);
   }
 
   async function submit() {
@@ -89,6 +96,7 @@ export default function Join() {
     setError(null);
     try {
       const joinedId = await joinFamily(normalized);
+      setFamilyId(joinedId);
       await clearPendingInvite();
       const empties = await loadEmptySoloGroups(joinedId);
       if (empties.length) setCleanup(empties);

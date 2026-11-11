@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { createFamily, fetchMyFamilies } from '@/src/groups/group-api';
 import { qk } from '@/src/lib/query-keys';
@@ -12,6 +12,8 @@ type State = {
   step: OnboardingStep | null; // null = 로딩 중
   pendingInvite: string | null;
   error: boolean;
+  /** 첫 확인이 오프라인이라 멈춰 있음(캐시된 상태도 없음). */
+  offline: boolean;
   retry: () => void;
 };
 
@@ -29,7 +31,7 @@ function createPersonalOnce(userId: string): Promise<string> {
   return p;
 }
 
-async function resolveForUser(userId: string): Promise<Resolved> {
+async function resolveForUser(userId: string, qc: QueryClient): Promise<Resolved> {
   const [profile, pending, families] = await Promise.all([
     hasProfile(userId),
     getPendingInvite(),
@@ -43,6 +45,8 @@ async function resolveForUser(userId: string): Promise<Resolved> {
   });
   if (next === 'create-personal') {
     await createPersonalOnce(userId);
+    // 홈이 먼저 받아 둔 빈 그룹 목록을 새 그룹으로 바꾼 뒤에 ready로 넘어간다(빈 홈 방지).
+    await qc.invalidateQueries({ queryKey: qk.families(), refetchType: 'all' });
     return { step: 'ready', pendingInvite: pending };
   }
   return { step: next, pendingInvite: pending };
@@ -53,9 +57,10 @@ async function resolveForUser(userId: string): Promise<Resolved> {
  * 프로필 저장/그룹 참여 후 `qk.onboarding(userId)`를 무효화하면 리마운트 없이 다음 단계로 넘어간다.
  */
 export function useOnboarding(userId: string | null): State {
+  const qc = useQueryClient();
   const q = useQuery({
     queryKey: qk.onboarding(userId ?? ''),
-    queryFn: () => resolveForUser(userId!),
+    queryFn: () => resolveForUser(userId!, qc),
     enabled: !!userId,
     retry: false,
     staleTime: 0,
@@ -63,12 +68,16 @@ export function useOnboarding(userId: string | null): State {
   const { refetch } = q;
   const retry = useCallback(() => void refetch(), [refetch]);
 
-  if (!userId) return { step: 'login', pendingInvite: null, error: false, retry };
-  if (q.isError) return { step: null, pendingInvite: null, error: true, retry };
+  if (!userId) return { step: 'login', pendingInvite: null, error: false, offline: false, retry };
+  // 이미 확인한 상태가 있으면 백그라운드 재조회 실패로 앱을 오류 화면으로 바꾸지 않는다.
+  if (q.isError && !q.data) {
+    return { step: null, pendingInvite: null, error: true, offline: false, retry };
+  }
   return {
     step: q.data?.step ?? null,
     pendingInvite: q.data?.pendingInvite ?? null,
     error: false,
+    offline: !q.data && q.fetchStatus === 'paused',
     retry,
   };
 }

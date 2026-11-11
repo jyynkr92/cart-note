@@ -1,10 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { PortalHost } from '@rn-primitives/portal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Join from '@/app/(auth)/join';
 import { loadEmptySoloGroups } from '@/src/groups/empty-group-cleanup';
 import { GroupError, joinFamily, leaveFamily } from '@/src/groups/group-api';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
+import { CURRENT_GROUP_KEY, resetCurrentGroupStore } from '@/src/groups/current-group-store';
+import { toast } from '@/src/lib/toast';
 
 const mockReplace = jest.fn();
 let mockParams: Record<string, string> = {};
@@ -25,6 +28,7 @@ jest.mock('@/src/onboarding/pending-invite', () => ({
   clearPendingInvite: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('@/src/lib/supabase', () => ({ supabase: {} }));
+jest.mock('@/src/lib/toast', () => ({ toast: { error: jest.fn() } }));
 jest.mock('@/src/auth/AuthProvider', () => ({
   useAuth: () => ({ session: { user: { id: 'u1' } }, loading: false }),
 }));
@@ -40,8 +44,10 @@ const renderJoin = () =>
     </QueryClientProvider>
   );
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  await AsyncStorage.clear();
+  resetCurrentGroupStore();
   mockParams = {};
   (loadEmptySoloGroups as jest.Mock).mockResolvedValue([]);
 });
@@ -86,6 +92,13 @@ it('joins, clears the pending invite and goes home', async () => {
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
   expect(join).toHaveBeenCalledWith('012345');
   expect(clearPendingInvite).toHaveBeenCalled();
+});
+
+it('selects the joined group as current', async () => {
+  join.mockResolvedValue('f9');
+  await submit();
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+  expect(await AsyncStorage.getItem(CURRENT_GROUP_KEY)).toBe('f9');
 });
 
 it('prefills the code from the deep link param', async () => {
@@ -139,6 +152,15 @@ describe('empty solo group cleanup', () => {
     await fireEvent.press(await screen.findByText('유지'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
     expect(leaveFamily).not.toHaveBeenCalled();
+  });
+
+  it('tells the user when removing the empty group fails, and still finishes', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
+    (leaveFamily as jest.Mock).mockRejectedValue(new Error('offline'));
+    await submit();
+    await fireEvent.press(await screen.findByText('삭제'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(toast.error).toHaveBeenCalledWith('그룹을 삭제하지 못했어요');
   });
 
   it('prompts once per group, in sequence', async () => {

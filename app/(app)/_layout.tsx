@@ -13,7 +13,7 @@ import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
-  const { step, pendingInvite, error, retry } = useOnboarding(
+  const { step, pendingInvite, error, offline, retry } = useOnboarding(
     loading ? null : (session?.user.id ?? null)
   );
   const family = useCurrentFamily();
@@ -32,6 +32,14 @@ export default function AppLayout() {
         <Button onPress={retry}>
           <Text>다시 시도</Text>
         </Button>
+      </View>
+    );
+  }
+
+  if (offline) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background px-6">
+        <Text>오프라인이라 확인할 수 없어요</Text>
       </View>
     );
   }
