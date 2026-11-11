@@ -11,21 +11,6 @@ import { fetchLists, insertList, type List } from '@/src/lists/list-api';
 import { createQueryClient } from '@/src/lib/query-client';
 import { disposeClient } from '@/test-utils/dispose-client';
 
-// reanimated/worklets는 네이티브 모듈이 필요해 Jest에서는 최소한으로 대체한다.
-jest.mock('react-native-reanimated', () => {
-  const { View, Pressable } = require('react-native');
-  const chain: any = new Proxy(() => chain, { get: () => chain });
-  return {
-    __esModule: true,
-    default: { View, createAnimatedComponent: (c: unknown) => c },
-    FadeIn: chain,
-    FadeOut: chain,
-    ReduceMotion: { System: 'system' },
-    Pressable,
-  };
-});
-jest.mock('lucide-react-native', () => new Proxy({ __esModule: true }, { get: (t, k) => (k in t ? (t as any)[k] : () => null) }));
-jest.mock('react-native-screens', () => ({ FullWindowOverlay: ({ children }: any) => children }));
 const mockPush = jest.fn();
 jest.mock('expo-router', () => {
   const { Text } = require('react-native');
@@ -86,12 +71,6 @@ const renderWithClient = (ui: ReactElement) =>
       <PortalHost />
     </QueryClientProvider>
   );
-
-// 드롭다운은 트리거를 measure한 뒤에야 내용을 그린다. Jest의 View는 measure가 no-op이라 값을 채워 준다.
-beforeAll(() => {
-  const { View } = require('react-native');
-  View.prototype.measure = (cb: (...n: number[]) => void) => cb(0, 0, 100, 40, 0, 0);
-});
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -231,6 +210,17 @@ describe('add list', () => {
     await waitFor(() =>
       expect(insertList).toHaveBeenCalledWith(expect.objectContaining({ name: '쿠팡', kind: 'online' }))
     );
+  });
+});
+
+describe('load error', () => {
+  it('shows a retry state when the lists failed to load and retries on press', async () => {
+    client.setDefaultOptions({ queries: { retry: false } });
+    lists.mockRejectedValueOnce(new Error('network'));
+    await renderWithClient(<Home />);
+    await fireEvent.press(await screen.findByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(lists).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('다시 시도')).toBeNull());
   });
 });
 

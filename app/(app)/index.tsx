@@ -1,4 +1,4 @@
-import { useRouter, type Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { useCurrentGroup, useFamilyMembers } from '@/src/groups/use-groups';
 import { ListCard, sortLists } from '@/src/lists/ListCard';
 import { useCreateList, useLists } from '@/src/lists/use-lists';
 import { normalizeName } from '@/src/lib/text';
+import { useTopInset } from '@/src/lib/use-top-inset';
 
 type NewKind = 'store' | 'online';
 
@@ -29,6 +30,7 @@ export default function Home() {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [kind, setKind] = useState<NewKind>('store');
+  const paddingTop = useTopInset();
 
   // 그룹이 없으면 온보딩 가드가 개인 그룹 생성/참여 화면으로 보낸다.
   if (!family) {
@@ -56,17 +58,22 @@ export default function Home() {
   }
 
   return (
-    <View className="flex-1 gap-4 bg-background px-4 pt-16">
+    <View className="flex-1 gap-4 bg-background px-4" style={{ paddingTop }}>
       <GroupSwitcher family={family} families={families} />
+      {lists.isError && !lists.data ? (
+        <View className="flex-1 items-center justify-center gap-4">
+          <Text>불러오지 못했어요</Text>
+          <Button onPress={() => void lists.refetch()}>
+            <Text>다시 시도</Text>
+          </Button>
+        </View>
+      ) : (
       <ScrollView contentContainerClassName="gap-3 pb-6">
         {sortLists(lists.data ?? []).map((item) => (
           <ListCard
             key={item.id}
             list={item}
-            // 목록 상세 라우트(app/(app)/list/[id])는 다음 태스크에서 만든다. 그 전까지 typed routes에 없다.
-            onPress={() =>
-              router.push({ pathname: '/list/[id]', params: { id: item.id } } as unknown as Href)
-            }
+            onPress={() => router.push({ pathname: '/list/[id]', params: { id: item.id } })}
           />
         ))}
         <View className="gap-4">
@@ -80,6 +87,7 @@ export default function Home() {
           ) : null}
         </View>
       </ScrollView>
+      )}
 
       <Dialog open={adding} onOpenChange={setAdding}>
         <DialogContent>

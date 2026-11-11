@@ -1,10 +1,10 @@
-import { onlineManager } from '@tanstack/react-query';
 import { Redirect, Stack } from 'expo-router';
-import { useSyncExternalStore } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { useIsOnline } from '@/src/lib/use-top-inset';
 import { useOnboarding } from '@/src/onboarding/use-onboarding';
 
 export default function AppLayout() {
@@ -48,14 +48,11 @@ export default function AppLayout() {
 
 /** 모든 (app) 화면 위에 노출된다. NetInfo가 onlineManager를 갱신한다. */
 function OfflineBanner() {
-  const online = useSyncExternalStore(
-    (cb) => onlineManager.subscribe(cb),
-    () => onlineManager.isOnline(),
-    () => true
-  );
+  const online = useIsOnline();
+  const { top } = useSafeAreaInsets();
   if (online) return null;
   return (
-    <View className="bg-muted px-4 pb-2 pt-12">
+    <View className="bg-muted px-4 pb-2" style={{ paddingTop: top + 8 }}>
       <Text className="text-center text-sm text-muted-foreground">오프라인</Text>
     </View>
   );

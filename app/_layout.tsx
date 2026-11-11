@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import { PortalHost } from '@rn-primitives/portal';
 import { Stack } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { AuthProvider, useAuth } from '@/src/auth/AuthProvider';
@@ -58,6 +59,7 @@ export default function RootLayout() {
   const { colorScheme } = useColorScheme();
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <PersistQueryClientProvider
@@ -71,5 +73,6 @@ export default function RootLayout() {
       <PortalHost />
       <ToastHost />
     </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
