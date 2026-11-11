@@ -30,9 +30,9 @@ npx supabase start
 | API | 55321 |
 | DB | 55322 |
 | Studio | 55323 |
-| Mailpit (로그인 이메일/OTP 확인) | 55324 |
+| 이메일 테스트 UI (Mailpit, 로그인 이메일/OTP 확인) | 55324 |
 
-로그인 코드는 실제로 발송되지 않고 Mailpit(`http://127.0.0.1:55324`)에서 확인한다.
+로그인 코드는 실제로 발송되지 않고 이메일 테스트 UI(Mailpit, `http://127.0.0.1:55324`)에서 확인한다.
 
 ## 앱 환경 변수
 
@@ -42,8 +42,6 @@ npx supabase start
 EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:55321
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<npx supabase status 로 확인한 anon key>
 ```
-
-주의: `.env.example`의 URL 예시는 `54321`로 되어 있지만 이 프로젝트의 API 포트는 `55321`이다.
 
 ## Edge Function 시크릿
 
@@ -58,13 +56,19 @@ KAKAO_REST_KEY=<카카오 REST API 키>
 
 ## 개발 빌드
 
-지오펜싱, 백그라운드 위치, 알림은 Expo Go에서 동작하지 않는다. 개발 빌드가 필요하다.
+지오펜싱, 백그라운드 위치, 알림은 Expo Go에서 동작하지 않는다. `expo-dev-client`가 설치되어 있으므로 개발 빌드를 쓴다.
+
+로컬 빌드:
 
 ```bash
 npx expo prebuild
+npx expo run:ios      # 또는
+npx expo run:android
 ```
 
-또는 EAS로 빌드한다 (`eas build --profile development`). 현재 저장소에는 `eas.json`이 없으므로 EAS를 쓰려면 development 프로필을 먼저 만들어야 한다. 이 README는 그 값을 정하지 않는다. 개발 빌드는 아직 수행하지 않았다.
+EAS 빌드를 쓰려면 `eas.json`에 `developmentClient: true`인 development 프로필이 필요하다. 현재 저장소에는 `eas.json`이 없으므로 먼저 만들어야 하며, 이 README는 그 값을 정하지 않는다.
+
+개발 빌드는 아직 수행하지 않았다.
 
 ## 명령
 

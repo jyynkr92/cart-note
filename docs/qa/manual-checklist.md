@@ -11,7 +11,7 @@
 
 | 완료 | 항목 | 절차 | 기대 결과 | 결과 |
 |---|---|---|---|---|
-| [ ] | 네이티브 설정 | prebuild 또는 EAS 개발 빌드 후 Info.plist와 Android manifest 확인 | 빌드 성공. Info.plist에 `UIBackgroundModes: location`, 한국어 위치 권한 문구(AlwaysAndWhenInUse/Always/WhenInUse, FullAccuracy), `NSMotionUsageDescription` 없음. manifest에 `ACCESS_BACKGROUND_LOCATION` | 미수행 |
+| [ ] | 네이티브 설정 | `npx expo prebuild` 후 `ios/<앱>/Info.plist`와 `android/app/src/main/AndroidManifest.xml` 확인 (EAS 빌드면 `npx expo config --type introspect`로 확인) | 빌드 성공. Info.plist에 `UIBackgroundModes: location`, 한국어 위치 권한 문구(AlwaysAndWhenInUse/Always/WhenInUse, FullAccuracy), `NSMotionUsageDescription` 없음. manifest에 `ACCESS_BACKGROUND_LOCATION` | 미수행 |
 | [ ] | 커스텀 진입점 | 개발/릴리스 빌드 실행, `cartnote://join?code=...`와 로그인 링크 열기 | `index.ts` 진입점으로 정상 부팅하고 딥링크가 동작 | 미수행 |
 | [ ] | Play Console 선언 (M8) | `FOREGROUND_SERVICE_LOCATION` 권한 확인 | 포그라운드 서비스 선언 필요 여부 판단. 불필요하면 `android.blockedPermissions` 또는 `isAndroidForegroundServiceEnabled: false` 검토 | 미수행 |
 | [ ] | iOS aps-environment | 빌드된 entitlements 확인 | expo-notifications가 추가한 `aps-environment`가 원격 푸시 없이도 문제 없음 | 미수행 |
@@ -39,17 +39,27 @@
 |---|---|---|---|---|
 | [ ] | 권한 순서 | 설정에서 근처 마트 알림 켜기 | 알림 → 위치 "앱 사용 중" → "항상 허용" 순. Android 11+는 시스템 설정으로 이동 안내. 거부 시 `위치 권한이 필요해요`와 `설정 열기`, 토글은 꺼진 채 유지. 토글은 열릴 때 잠깐 비활성, 스크린리더는 체크박스 하나만 읽음 | 미수행 |
 | [ ] | Android 알림 채널 | Android 13+에서 켜기 | `default` 채널(HIGH)이 권한 요청 전에 생성되고 알림이 해당 채널에서 헤즈업으로 표시 (Miscellaneous 아님) | 미수행 |
-| [ ] | 진입 알림 (포그라운드/백그라운드/앱 종료) | 마트 지점 좌표로 위치 이동 (각 상태에서) | 문구가 맞음: 그룹 2개 이상이면 그룹명 접두, 사야 할 것 개수 포함. 오프라인이고 캐시 없으면 개수 없이 표시 | 미수행 |
-| [ ] | Android 종료 상태 headless | 앱 프로세스 종료 후 진입 이벤트 | `Task 'cart-note-geofence' is not defined` 경고 없이 알림 도착 | 미수행 |
+| [ ] | 진입 알림: 포그라운드 | 앱을 연 채 마트 지점 좌표로 위치 이동 | 배너 표시. 문구에 사야 할 것 개수 포함 | 미수행 |
+| [ ] | 진입 알림: 백그라운드 | 홈 버튼으로 앱을 내린 상태에서 위치 이동 | 알림 도착. 그룹이 2개 이상이면 그룹명 접두 | 미수행 |
+| [ ] | 진입 알림: 앱 종료 | 앱 전환기에서 위로 밀어 종료한 상태에서 위치 이동 | 알림 도착 | 미수행 |
+| [ ] | 진입 알림: 오프라인, 캐시 없음 | 설치 직후 비행기 모드에서 위치 이동 | 개수 없이 `<지점> 근처예요`만 표시 | 미수행 |
+| [ ] | Android 종료 상태 headless | 설정 → 앱 → Cart Note → 강제 종료 후 에뮬레이터 위치를 지점 좌표로 이동. `adb logcat -s ReactNativeJS` 로 로그 확인 | logcat에 `Task 'cart-note-geofence' is not defined` 경고가 없고 알림 도착 | 미수행 |
 | [ ] | 오프라인 + 만료 토큰 | 비행기 모드, 마지막 포그라운드 후 1시간 이상 경과, 진입 | 캐시된 개수로 알림 도착 | 미수행 |
-| [ ] | 3시간 쿨다운 | 같은 목록 지점에 나갔다 재진입 (3시간 이내, 이후) | 3시간 이내 재알림 없음, 이후 알림. 같은 목록의 겹치는 지점은 알림 1개 | 미수행 |
+| [ ] | 쿨다운: 3시간 이내 재진입 | 지점 진입 알림 후 반경 밖으로 나갔다가 다시 진입 (3시간 이내) | 재알림 없음 | 미수행 |
+| [ ] | 쿨다운: 3시간 경과 후 | 3시간 이상 지난 뒤(또는 기기 시간을 앞당겨) 재진입 | 알림 도착 | 미수행 |
+| [ ] | 같은 목록의 겹치는 지점 | 같은 목록에 겹치는 지점 2개를 등록하고 동시에 진입 | 알림 1개 | 미수행 |
 | [ ] | 미완료 0개 | 미완료 항목이 없는 목록의 지점에 진입 | 알림 없음 | 미수행 |
 | [ ] | 포그라운드 배너 | 앱 실행 중 진입 | 배너 표시 | 미수행 |
-| [ ] | 알림 탭 → 이동 | 실행 중, 백그라운드, 종료 상태에서 각각 알림 탭 | 해당 그룹으로 전환되고 `list/[id]`가 정확히 한 번 열림. 인증/온보딩 가드 이후이며 "navigate before mount" 경고 없음. 탈퇴한 그룹의 알림은 아무 일도 없음 | 미수행 |
+| [ ] | 알림 탭: 앱 실행 중 | 포그라운드/백그라운드에서 알림 탭 | 해당 그룹으로 전환되고 `list/[id]`가 정확히 한 번 열림 | 미수행 |
+| [ ] | 알림 탭: 앱 종료 상태 (cold start) | 종료 상태에서 알림 탭 | 인증/온보딩 가드 이후 `list/[id]`가 한 번 열림. "navigate before mount" 경고 없음 | 미수행 |
+| [ ] | 알림 탭: 탈퇴한 그룹 | 알림 수신 후 해당 그룹에서 탈퇴하고 알림 탭 | 아무 일도 일어나지 않음 | 미수행 |
 | [ ] | 20개 초과 지점 | 지점 21개 이상 등록 | 가까운 20곳만 등록. 마지막 위치가 없어도 5초 타임아웃 경로가 UI를 막지 않음 | 미수행 |
 | [ ] | iOS 재동기화 | 이미 안에 있는 지역에서 포그라운드 복귀/동기화 | 위치 변경이 없으면 재등록되지 않아 Enter 알림 재발생 없음. 반경을 바꾸면 재등록 | 미수행 |
 | [ ] | 권한 회수 | 시스템 설정에서 백그라운드 위치 회수 후 앱 복귀 | 다음 포그라운드 동기화에서 토글이 꺼지고 지오펜싱 중지, 크래시 없음 | 미수행 |
-| [ ] | Android 위치 껐다 켜기 | 위치 서비스를 끄고 다시 켠 뒤 앱을 포그라운드로 | 이후 진입(Enter)이 여전히 발생 | 미수행 |
+| [ ] | Android 위치 껐다 켜기 | 위치 서비스를 끄고 다시 켠 뒤 앱을 포그라운드로. (출처: Task 14 재리뷰 N1, 지오펜스 fingerprint 때문에 재등록되지 않을 위험. progress.md 참고) | 이후 지점 진입(Enter)이 여전히 발생 | 미수행 |
+| [ ] | OS가 지역을 버린 경우 재등록 | OS가 지역을 해제한 상황(위치 끄기/재부팅/기기 설정 변경) 후 지점이 그대로인 채 앱 포그라운드 | `hasStartedGeofencingAsync`가 false면 재등록됨. true로 보고되는데 실제로 지역이 없는지 확인 (fingerprint 건너뛰기 위험) | 미수행 |
+| [ ] | iOS 이미 안에 있을 때 등록 | 지점 안에 있는 상태에서 알림을 처음 켬 | 등록 직후 Enter가 즉시 발생할 수 있음. 쿨다운으로 반복은 제한됨. 동작을 기록 | 미수행 |
+| [ ] | 설치 직후 첫 알림의 그룹 접두 | 새 설치/로그인 후 첫 동기화 전에 그룹 2개 이상인 상태로 진입 | `groupCount` 기본값이 1이라 그룹명 접두가 빠질 수 있음. 첫 동기화 후에는 접두 표시. 동작을 기록 | 미수행 |
 | [ ] | 로그아웃 | 로그아웃 후 지역 진입, 다른 계정으로 로그인 | `hasStartedGeofencingAsync` false, 알림 없음 (동기화 중 로그아웃 포함). 다른 계정은 자기 지점만 등록 | 미수행 |
 | [ ] | 지점 변경 반영 | 현재 그룹에서 지점 추가/삭제 | 디바운스 후 재등록. 다른 그룹 변경은 다음 포그라운드에 반영 | 미수행 |
 
@@ -59,7 +69,7 @@
 |---|---|---|---|---|
 | [ ] | Edge Function 실행 | `supabase/functions/.env`에 `KAKAO_REST_KEY` 설정 후 `npx supabase functions serve` | `index.ts`(Deno 배선)가 오류 없이 기동. Deno가 없어 아직 한 번도 실행되지 않았음 | 미수행 |
 | [ ] | 카카오 실검색 | 지점 추가에서 "코스트코 양재" 검색 | 결과 목록 표시. 실패 시 재시도 안내 | 미수행 |
-| [ ] | 인증 | 로그인 없이 함수 호출 | `verify_jwt` 및 `getUser`로 거부 | 미수행 |
+| [ ] | 인증 | `npx supabase functions serve` 실행 중에 `curl -i -X POST 'http://127.0.0.1:55321/functions/v1/kakao-place-search' -H 'Content-Type: application/json' -d '{"query":"코스트코 양재"}'` (Authorization 헤더 없이) | HTTP 401. 로그인 사용자의 토큰을 붙이면 200 | 미수행 |
 
 ## 6. 오프라인과 동기화
 
