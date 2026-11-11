@@ -121,3 +121,18 @@ it('does not warn about permissions when alerts were never turned on', async () 
   expect(await toggle()).not.toBeChecked();
   expect(screen.queryByText('위치 권한이 필요해요')).toBeNull();
 });
+
+it('clears the denied state on resume once permission is granted in system settings', async () => {
+  let handler: ((s: string) => void) | undefined;
+  jest.spyOn(AppState, 'addEventListener').mockImplementationOnce((_, h) => {
+    handler = h as never;
+    return { remove: jest.fn() } as never;
+  });
+  request.mockResolvedValue('denied');
+  await render(<NearbyAlertToggle />);
+  await fireEvent.press(await toggle());
+  expect(await screen.findByText('위치 권한이 필요해요')).toBeTruthy();
+  hasPermission.mockResolvedValue(true); // 설정 열기 → 권한 허용 후 복귀
+  await act(async () => handler?.('active'));
+  await waitFor(() => expect(screen.queryByText('위치 권한이 필요해요')).toBeNull());
+});

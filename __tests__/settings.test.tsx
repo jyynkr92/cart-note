@@ -22,6 +22,7 @@ import {
 import { toast } from '@/src/lib/toast';
 import { clearPendingInvite } from '@/src/onboarding/pending-invite';
 import { createQueryClient } from '@/src/lib/query-client';
+import { qk } from '@/src/lib/query-keys';
 import { updateDisplayName } from '@/src/onboarding/profile-api';
 import { disposeClient } from '@/test-utils/dispose-client';
 
@@ -126,6 +127,15 @@ it('shows a message with a close button when the group cannot be loaded', async 
   expect(mockBack).toHaveBeenCalled();
 });
 
+it('still offers sign-out when the group cannot be loaded', async () => {
+  (signOut as jest.Mock).mockResolvedValue(undefined);
+  families.mockResolvedValue([]);
+  await renderSettings();
+  await fireEvent.press(await screen.findByText('로그아웃'));
+  await waitFor(() => expect(signOut).toHaveBeenCalled());
+  expect(clearPendingInvite).toHaveBeenCalled();
+});
+
 it('regenerates only once on a double tap', async () => {
   let finish!: (v: string) => void;
   (regenerateInviteCode as jest.Mock).mockReturnValue(new Promise<string>((r) => (finish = r)));
@@ -218,6 +228,24 @@ describe('leaving the group', () => {
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
     expect(screen.queryByText('012345')).toBeNull();
     expect(screen.queryByText('그룹 정보를 불러올 수 없어요')).toBeNull();
+  });
+});
+
+describe('leaving the last group when the follow-up check fails', () => {
+  it('reports the failure and stays instead of going to a blank home', async () => {
+    (leaveFamily as jest.Mock).mockResolvedValue(undefined);
+    // 개인 그룹 생성(온보딩 재조회)이 실패하는 상황
+    client.setQueryDefaults(qk.onboarding('u1'), {
+      queryFn: () => Promise.reject(new Error('create failed')),
+    });
+    client.setQueryData(qk.onboarding('u1'), { step: 'ready', pendingInvite: null });
+    families.mockResolvedValue([G1]);
+    await ready();
+    families.mockResolvedValue([]);
+    await fireEvent.press(screen.getByText('그룹 나가기'));
+    await fireEvent.press(await screen.findByText('나가기'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('새 그룹을 준비하지 못했어요'));
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 });
 

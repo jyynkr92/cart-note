@@ -17,16 +17,20 @@ export function NearbyAlertToggle() {
   const [busy, setBusy] = useState(false);
   const onRef = useRef<boolean | null>(null);
   onRef.current = on;
+  const deniedRef = useRef(false);
+  deniedRef.current = denied;
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       const wasOn = onRef.current === true;
+      const wasDenied = deniedRef.current;
       const v = await getEnabled();
       if (!alive) return;
       setOn(v);
       // 켜 둔 상태에서 시스템 설정으로 위치 권한을 끄면(동기화가 설정을 꺼도) 거부 안내를 보여 준다.
-      if (!v && !wasOn) return;
+      // 거부 안내 중이면 설정에서 허용하고 돌아왔는지 확인해 안내를 지운다.
+      if (!v && !wasOn && !wasDenied) return;
       const ok = await hasBackgroundLocationPermission();
       if (alive) setDenied(!ok);
     };

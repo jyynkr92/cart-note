@@ -1,3 +1,4 @@
+import { isAuthRetryableFetchError } from '@supabase/supabase-js';
 import { supabase } from '@/src/lib/supabase';
 
 export async function sendOtp(email: string): Promise<void> {
@@ -14,9 +15,10 @@ export async function verifyOtp(email: string, token: string): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
-  // 서버 호출 없이 이 기기의 세션만 지운다(오프라인에서도 로그아웃 가능).
+  // 이 기기의 세션만 끝낸다. 저장된 세션은 서버 응답과 관계없이 먼저 지워지고 SIGNED_OUT이 나가므로,
+  // 오프라인에서 서버 로그아웃 요청만 실패한 경우(재시도 가능한 네트워크 오류)는 성공으로 본다.
   const { error } = await supabase.auth.signOut({ scope: 'local' });
-  if (error) throw error;
+  if (error && !isAuthRetryableFetchError(error)) throw error;
 }
 
 const AUTH_LINK_RE = /^cartnote:\/\/auth\/?(?:\?[^#]*)?#(.+)$/;

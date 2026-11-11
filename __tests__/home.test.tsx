@@ -120,6 +120,32 @@ it('does not crash and shows no lists when there are no groups', async () => {
   expect(screen.queryByText('+ 목록 추가')).toBeNull();
 });
 
+describe('no group (e.g. creating the personal group failed after leaving the last one)', () => {
+  it('offers a retry that refetches onboarding and groups, and recovers', async () => {
+    families.mockResolvedValue([]);
+    await renderWithClient(<Home />);
+    expect(await screen.findByText('그룹을 불러오지 못했어요')).toBeTruthy();
+    const spy = jest.spyOn(client, 'invalidateQueries');
+    families.mockResolvedValue([G1]);
+    await fireEvent.press(screen.getByText('다시 시도'));
+    const calls = spy.mock.calls.map((c) => c[0] as { queryKey: unknown[]; refetchType?: string });
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        { queryKey: ['onboarding', 'u1'], refetchType: 'all' },
+        { queryKey: ['families'], refetchType: 'all' },
+      ])
+    );
+    expect(await screen.findByText('우리집')).toBeTruthy();
+  });
+
+  it('keeps settings reachable', async () => {
+    families.mockResolvedValue([]);
+    await renderWithClient(<Home />);
+    await fireEvent.press(await screen.findByRole('button', { name: '설정' }));
+    expect(mockPush).toHaveBeenCalledWith('/settings');
+  });
+});
+
 describe('group switcher', () => {
   it('shows a plain name without a menu when there is one group', async () => {
     await renderWithClient(<Home />);

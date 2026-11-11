@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Settings } from 'lucide-react-native';
 import { useState } from 'react';
@@ -13,10 +14,12 @@ import {
 import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
+import { useAuth } from '@/src/auth/AuthProvider';
 import { GroupSwitcher } from '@/src/groups/GroupSwitcher';
 import { useCurrentGroup, useFamilyMembers } from '@/src/groups/use-groups';
 import { ListCard, sortLists } from '@/src/lists/ListCard';
 import { useCreateList, useLists } from '@/src/lists/use-lists';
+import { qk } from '@/src/lib/query-keys';
 import { normalizeName } from '@/src/lib/text';
 import { useTopInset } from '@/src/lib/use-top-inset';
 
@@ -24,6 +27,9 @@ type NewKind = 'store' | 'online';
 
 export default function Home() {
   const router = useRouter();
+  const qc = useQueryClient();
+  const { session } = useAuth();
+  const userId = session?.user.id ?? null;
   const { family, families, loading } = useCurrentGroup();
   const familyId = family?.id ?? null;
   const lists = useLists(familyId);
@@ -34,14 +40,36 @@ export default function Home() {
   const [kind, setKind] = useState<NewKind>('store');
   const paddingTop = useTopInset();
 
-  // 그룹이 없으면 온보딩 가드가 개인 그룹 생성/참여 화면으로 보낸다.
+  // 그룹이 없으면 보통 온보딩 가드가 개인 그룹 생성/참여 화면으로 보낸다.
+  // 그 생성이 실패하면(예: 마지막 그룹을 나간 직후 오프라인) 가드는 이전 'ready'에 머무르므로 여기서 복구할 길을 준다.
   if (!family) {
-    return loading ? (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator />
+    if (loading) {
+      return (
+        <View className="flex-1 items-center justify-center bg-background">
+          <ActivityIndicator />
+        </View>
+      );
+    }
+    const retry = () =>
+      void Promise.all([
+        userId
+          ? qc.invalidateQueries({ queryKey: qk.onboarding(userId), refetchType: 'all' })
+          : undefined,
+        qc.invalidateQueries({ queryKey: qk.families(), refetchType: 'all' }),
+      ]);
+    return (
+      <View className="flex-1 items-center justify-center gap-4 bg-background px-6">
+        <Text>그룹을 불러오지 못했어요</Text>
+        <Button onPress={retry}>
+          <Text>다시 시도</Text>
+        </Button>
+        <Button
+          variant="ghost"
+          accessibilityLabel="설정"
+          onPress={() => router.push('/settings')}>
+          <Text>설정</Text>
+        </Button>
       </View>
-    ) : (
-      <View className="flex-1 bg-background" />
     );
   }
 

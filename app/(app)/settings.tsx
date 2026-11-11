@@ -58,6 +58,10 @@ export default function Settings() {
         <Button variant="outline" onPress={() => router.back()}>
           <Text>닫기</Text>
         </Button>
+        {/* 그룹 준비가 계속 실패해도 빠져나갈 길(아래에 선언된 함수, 호이스팅됨). */}
+        <Button variant="ghost" onPress={() => void logout()} disabled={busy}>
+          <Text>로그아웃</Text>
+        </Button>
       </View>
     );
   }
@@ -147,6 +151,13 @@ export default function Settings() {
       qc.invalidateQueries({ queryKey: qk.families(), refetchType: 'all' }),
     ]);
     // 남은 그룹이 없으면 위의 온보딩 재조회가 개인 그룹을 만들고(또는 참여 화면으로 보내고) 끝난다.
+    // 그 재조회가 실패하면 빈 홈으로 보내지 않고 알린 뒤 여기 머문다(홈에도 다시 시도가 있다).
+    if (userId && qc.getQueryState(qk.onboarding(userId))?.status === 'error') {
+      toast.error('새 그룹을 준비하지 못했어요');
+      setLeaving(false);
+      unlock();
+      return;
+    }
     // 어느 쪽이든 홈으로 보내야 나가기 로딩 화면에 머물지 않는다.
     router.replace('/');
   }

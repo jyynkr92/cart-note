@@ -1,3 +1,4 @@
+import { AuthRetryableFetchError } from '@supabase/supabase-js';
 import { parseAuthFragment, signOut } from '@/src/auth/auth-api';
 import { supabase } from '@/src/lib/supabase';
 
@@ -8,6 +9,18 @@ describe('signOut', () => {
     (supabase.auth.signOut as jest.Mock).mockResolvedValue({ error: null });
     await signOut();
     expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  it('treats an offline network failure as signed out (the local session is already gone)', async () => {
+    (supabase.auth.signOut as jest.Mock).mockResolvedValue({
+      error: new AuthRetryableFetchError('Failed to fetch', 0),
+    });
+    await expect(signOut()).resolves.toBeUndefined();
+  });
+
+  it('still throws other errors', async () => {
+    (supabase.auth.signOut as jest.Mock).mockResolvedValue({ error: new Error('boom') });
+    await expect(signOut()).rejects.toThrow('boom');
   });
 });
 

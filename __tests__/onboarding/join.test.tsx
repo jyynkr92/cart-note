@@ -8,6 +8,7 @@ import { GroupError, joinFamily, leaveFamily } from '@/src/groups/group-api';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
 import { CURRENT_GROUP_KEY, resetCurrentGroupStore } from '@/src/groups/current-group-store';
 import { toast } from '@/src/lib/toast';
+import { qk } from '@/src/lib/query-keys';
 
 const mockReplace = jest.fn();
 let mockParams: Record<string, string> = {};
@@ -99,6 +100,18 @@ it('selects the joined group as current', async () => {
   await submit();
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
   expect(await AsyncStorage.getItem(CURRENT_GROUP_KEY)).toBe('f9');
+});
+
+it('stays on join when "나중에 할게요" cannot prepare a group', async () => {
+  await renderJoin();
+  testClient.setQueryDefaults(qk.onboarding('u1'), {
+    queryFn: () => Promise.reject(new Error('create failed')),
+    retry: false,
+  });
+  testClient.setQueryData(qk.onboarding('u1'), { step: 'join-pending', pendingInvite: null });
+  await fireEvent.press(screen.getByText('나중에 할게요'));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('새 그룹을 준비하지 못했어요'));
+  expect(mockReplace).not.toHaveBeenCalled();
 });
 
 it('prefills the code from the deep link param', async () => {

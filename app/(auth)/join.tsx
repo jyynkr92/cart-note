@@ -113,6 +113,11 @@ export default function Join() {
   async function skip() {
     await clearPendingInvite();
     await refreshOnboarding();
+    // 그룹이 없어 개인 그룹을 만들다 실패했으면 빈 홈으로 가지 않고 여기 머문다.
+    if (session && queryClient.getQueryState(qk.onboarding(session.user.id))?.status === 'error') {
+      toast.error('새 그룹을 준비하지 못했어요');
+      return;
+    }
     router.replace('/');
   }
 
