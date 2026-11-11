@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
-import { defaultShouldDehydrateQuery, onlineManager, QueryClient } from '@tanstack/react-query';
+import {
+  defaultShouldDehydrateMutation,
+  defaultShouldDehydrateQuery,
+  onlineManager,
+  QueryClient,
+} from '@tanstack/react-query';
 import type { PersistQueryClientProviderProps } from '@tanstack/react-query-persist-client';
 import { registerItemMutations } from '@/src/items/use-items';
 import { registerListMutations } from '@/src/lists/use-lists';
@@ -40,6 +45,9 @@ export const persistOptions: PersistQueryClientProviderProps['persistOptions'] =
   buster: '1',
   dehydrateOptions: {
     // 온보딩 상태는 사용자/서버 상태에 따라 바뀌므로 디스크에 남기지 않는다.
+    // 쓰기 큐(['m', …])만 영속화한다. 키 없는 mutation(예: 장소 검색)은 저장하지 않는다.
+    shouldDehydrateMutation: (m) =>
+      defaultShouldDehydrateMutation(m) && m.options.mutationKey?.[0] === 'm',
     shouldDehydrateQuery: (q) => defaultShouldDehydrateQuery(q) && q.queryKey[0] !== 'onboarding',
   },
 };

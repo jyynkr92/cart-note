@@ -26,7 +26,11 @@ export default function Locations() {
   const deleteLocation = useDeleteLocation();
 
   const [text, setText] = useState('');
-  const search = useMutation<Place[], Error, string>({ mutationFn: (q) => searchPlaces(q) });
+  const search = useMutation<Place[], Error, string>({
+    mutationFn: (q) => searchPlaces(q),
+    // 오프라인에서 멈추지 않고 실패해 재시도 안내를 보여 준다(큐에도 쌓이지 않는다).
+    networkMode: 'always',
+  });
 
   const wrap = (children: React.ReactNode) => (
     <View className="flex-1 bg-background px-4" style={{ paddingTop }}>
@@ -102,7 +106,7 @@ export default function Locations() {
         ) : search.isError ? (
           <View className="items-center gap-4 py-6">
             <Text>검색에 실패했어요. 다시 시도해 주세요</Text>
-            <Button onPress={runSearch}>
+            <Button onPress={() => search.variables && search.mutate(search.variables)}>
               <Text>다시 시도</Text>
             </Button>
           </View>

@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(14);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'a@test.dev');
@@ -43,6 +43,17 @@ select lives_ok(
   'location on store list allowed');
 
 select is((select radius_m from list_locations where place_name = 'p'), 300, 'radius_m defaults to 300');
+
+insert into list_locations (list_id, family_id, place_name, lat, lng, kakao_place_id) values
+  ('20000000-0000-0000-0000-0000000000c2', '10000000-0000-0000-0000-00000000000a', 'k', 37.5, 127.0, 'kakao-1');
+
+select throws_ok(
+  $$insert into list_locations (list_id, family_id, place_name, lat, lng, kakao_place_id) values ('20000000-0000-0000-0000-0000000000c2', '10000000-0000-0000-0000-00000000000a', 'k again', 37.5, 127.0, 'kakao-1')$$,
+  '23505', null, 'same kakao_place_id twice on one list rejected');
+
+select lives_ok(
+  $$insert into list_locations (list_id, family_id, place_name, lat, lng) values ('20000000-0000-0000-0000-0000000000c2', '10000000-0000-0000-0000-00000000000a', 'manual 2', 37.5, 127.0)$$,
+  'locations without kakao_place_id are not constrained');
 
 select throws_ok(
   $$update lists set kind = 'online' where id = '20000000-0000-0000-0000-00000000000a'$$,

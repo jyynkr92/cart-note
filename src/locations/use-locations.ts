@@ -20,13 +20,6 @@ type AddVars = AddLocationInput & { id: string; radiusM: number };
 type DeleteVars = { id: string; listId: string; familyId: string };
 type Ctx = { prev: ListLocation[] | undefined };
 
-function afterSuccess(qc: QueryClient, listId: string, familyId: string) {
-  // 홈 카드의 📍 표시는 lists 쿼리의 지점 개수에서 온다.
-  void qc.invalidateQueries({ queryKey: qk.locations(listId) });
-  void qc.invalidateQueries({ queryKey: qk.allLocations() });
-  void qc.invalidateQueries({ queryKey: qk.lists(familyId) });
-}
-
 function define<V extends { listId: string; familyId: string }>(
   qc: QueryClient,
   spec: {
@@ -51,7 +44,7 @@ function define<V extends { listId: string; familyId: string }>(
       void qc.invalidateQueries({ queryKey: qk.locations(v.listId) });
       toast.error(spec.error);
     },
-    onSuccess: (_d: unknown, v: V) => afterSuccess(qc, v.listId, v.familyId),
+    // 큐가 빌 때 locations/allLocations/lists(홈 📍)를 함께 다시 맞춘다.
     onSettled: () => invalidateWhenIdle(qc),
   });
 }

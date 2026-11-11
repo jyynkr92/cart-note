@@ -131,14 +131,13 @@ describe('items while a mutation is pending', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('list_locations still invalidates locations and allLocations', () => {
+  it('list_locations only invalidates allLocations (the rest waits for the idle sweep)', () => {
     applyChange(
       qc,
       'list_locations',
       change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' })
     );
-    expect(keys()).toEqual(expect.arrayContaining([qk.locations('l1'), qk.allLocations()]));
-    expect(keys()).not.toContainEqual(qk.lists('f1'));
+    expect(keys()).toEqual([qk.allLocations()]);
   });
 });
 
@@ -186,5 +185,24 @@ describe('list_locations', () => {
   it('DELETE invalidates the prefixes', () => {
     applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
     expect(keys()).toEqual(expect.arrayContaining([['locations'], qk.allLocations(), ['lists']]));
+  });
+});
+
+describe('list_locations while mutations are busy', () => {
+  const busy = () => {
+    // 진행 중인 mutation 하나를 흉내 낸다.
+    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
+  };
+
+  it('INSERT/UPDATE skip locations(list_id) and lists, but still invalidate allLocations', () => {
+    busy();
+    applyChange(qc, 'list_locations', change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' }));
+    expect(keys()).toEqual([qk.allLocations()]);
+  });
+
+  it('DELETE skips the locations/lists prefixes, but still invalidates allLocations', () => {
+    busy();
+    applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
+    expect(keys()).toEqual([qk.allLocations()]);
   });
 });

@@ -13,13 +13,15 @@ export function newId(): string {
 }
 
 /**
- * 큐가 모두 비었을 때(마지막 mutation이 끝났을 때) 항목/목록 캐시 전체를 서버 상태로 다시 맞춘다.
+ * 큐가 모두 비었을 때(마지막 mutation이 끝났을 때) 항목/목록/지점 캐시 전체를 서버 상태로 다시 맞춘다.
  * 중간에는 건너뛰어 낙관적 값이 깜빡이지 않게 하고, 먼저 끝난 mutation이 건드린 목록도 빠짐없이 갱신한다.
  */
 export function invalidateWhenIdle(qc: QueryClient) {
   if (qc.isMutating({ mutationKey: mk.all }) > 1) return;
   void qc.invalidateQueries({ queryKey: ['items'] });
   void qc.invalidateQueries({ queryKey: ['lists'] });
+  void qc.invalidateQueries({ queryKey: ['locations'] });
+  void qc.invalidateQueries({ queryKey: ['allLocations'] });
 }
 
 /**

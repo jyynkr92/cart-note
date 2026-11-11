@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import Locations from '@/app/(app)/list/[id]/locations';
 import { fetchMyFamilies, fetchFamilyMembers, type Family } from '@/src/groups/group-api';
 import { resetCurrentGroupStore } from '@/src/groups/current-group-store';
@@ -154,9 +154,9 @@ it('invalidates locations, allLocations and lists after adding', async () => {
     const keys = spy.mock.calls.map((c) => JSON.stringify((c[0] as any)?.queryKey));
     expect(keys).toEqual(
       expect.arrayContaining([
-        JSON.stringify(qk.locations('l1')),
+        JSON.stringify(['locations']),
         JSON.stringify(qk.allLocations()),
-        JSON.stringify(qk.lists('g1')),
+        JSON.stringify(['lists']),
       ])
     );
   });
@@ -210,4 +210,46 @@ it('shows not-found for an unknown list', async () => {
   mockParams = { id: 'nope' };
   await renderScreen();
   expect(await screen.findByText('목록을 찾을 수 없어요')).toBeTruthy();
+});
+
+it('keeps an optimistic row while an earlier add is still in flight (no mid-queue flash)', async () => {
+  search.mockResolvedValue([place('k1', '코스트코 양재점'), place('k2', '코스트코 상봉점')]);
+  locations.mockResolvedValue([]);
+  let release!: () => void;
+  let release2!: () => void;
+  (insertLocation as jest.Mock)
+    .mockImplementationOnce(() => new Promise<void>((r) => (release = r)))
+    .mockImplementationOnce(() => new Promise<void>((r) => (release2 = r)));
+  await renderScreen();
+  await doSearch();
+  await waitFor(() => expect(fetchLocations).toHaveBeenCalled());
+  await fireEvent.press(await screen.findByRole('button', { name: '코스트코 양재점 추가' }));
+  await fireEvent.press(await screen.findByRole('button', { name: '코스트코 상봉점 추가' }));
+  await waitFor(() => expect(screen.getAllByTestId('location-name')).toHaveLength(2));
+  const before = locations.mock.calls.length;
+  release(); // 첫 mutation 성공 — 둘째가 아직 큐에 있으므로 재조회하면 안 된다.
+  await waitFor(() => expect(insertLocation).toHaveBeenCalledTimes(2));
+  expect(screen.getAllByTestId('location-name')).toHaveLength(2);
+  expect(locations.mock.calls.length).toBe(before);
+  release2();
+});
+
+it('retry re-runs the failed query, not the current input', async () => {
+  search.mockRejectedValueOnce(new Error('502')).mockResolvedValueOnce([place('k1', '코스트코')]);
+  await renderScreen();
+  await doSearch('코스트코');
+  await screen.findByText('검색에 실패했어요. 다시 시도해 주세요');
+  await fireEvent.changeText(screen.getByPlaceholderText(/지점 검색/), '이마트');
+  await fireEvent.press(screen.getByRole('button', { name: '다시 시도' }));
+  await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+  expect(search).toHaveBeenLastCalledWith('코스트코');
+});
+
+it('offline search fails to the retry message instead of hanging', async () => {
+  search.mockRejectedValue(new Error('offline'));
+  await renderScreen();
+  await screen.findByPlaceholderText(/지점 검색/);
+  await act(async () => onlineManager.setOnline(false)); // 화면이 뜬 뒤 오프라인이 된다
+  await doSearch();
+  expect(await screen.findByText('검색에 실패했어요. 다시 시도해 주세요')).toBeTruthy();
 });

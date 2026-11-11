@@ -76,14 +76,19 @@ export async function handlePlaceSearch(req: Request, deps: Deps): Promise<Respo
   try {
     const url = `${KAKAO_URL}?${new URLSearchParams({ query, size: String(PAGE_SIZE) })}`;
     const res = await deps.fetch(url, { headers: { Authorization: `KakaoAK ${deps.kakaoKey}` } });
-    if (!res.ok) return json(502, { error: 'search failed' });
+    if (!res.ok) {
+      // 상태 코드만 남긴다(응답 본문과 키는 로그에도 남기지 않는다).
+      console.error('kakao search upstream status', res.status);
+      return json(502, { error: 'search failed' });
+    }
     const data = await res.json();
     const docs: unknown[] = Array.isArray(data?.documents) ? data.documents : [];
     const places = docs
       .map((d) => toPlace((d ?? {}) as KakaoDoc))
       .filter((p): p is Place => p !== null);
     return json(200, { places });
-  } catch {
+  } catch (e) {
+    console.error('kakao search failed', e instanceof Error ? e.name : typeof e);
     return json(502, { error: 'search failed' });
   }
 }

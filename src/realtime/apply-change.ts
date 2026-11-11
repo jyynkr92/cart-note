@@ -78,13 +78,16 @@ export function applyChange(
       if (busy) return;
       return inv(qc, isDelete ? ['lists'] : qk.lists(row.family_id));
     case 'list_locations':
-      // locations는 invalidateWhenIdle이 다루지 않으므로 항상 무효화한다.
-      if (isDelete) {
-        inv(qc, ['locations']);
-        if (!busy) inv(qc, ['lists']);
-      } else {
-        inv(qc, qk.locations(row.list_id));
-        if (!busy) inv(qc, qk.lists(row.family_id)); // has_location
+      // 큐가 비어 있을 때만 목록별 캐시를 건드린다(비면 invalidateWhenIdle이 맞춘다).
+      // allLocations는 낙관적 값이 없는 읽기 전용 캐시라 항상 무효화한다.
+      if (!busy) {
+        if (isDelete) {
+          inv(qc, ['locations']);
+          inv(qc, ['lists']);
+        } else {
+          inv(qc, qk.locations(row.list_id));
+          inv(qc, qk.lists(row.family_id)); // has_location
+        }
       }
       inv(qc, qk.allLocations());
   }

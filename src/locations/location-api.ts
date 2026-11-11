@@ -51,7 +51,10 @@ export async function fetchAllMyLocations(): Promise<MyLocation[]> {
   }));
 }
 
-/** 재실행해도 중복되지 않도록 ON CONFLICT DO NOTHING으로 삽입한다. */
+/**
+ * 재실행해도 중복되지 않도록 ON CONFLICT DO NOTHING으로 삽입한다.
+ * 같은 목록에 같은 kakao_place_id가 이미 있으면(unique 위반 23505) 목표 상태이므로 성공으로 본다.
+ */
 export async function insertLocation(row: {
   id: string;
   listId: string;
@@ -59,22 +62,22 @@ export async function insertLocation(row: {
   place: Place;
   radiusM: number;
 }): Promise<void> {
-  check(
-    await supabase.from('list_locations').upsert(
-      {
-        id: row.id,
-        list_id: row.listId,
-        family_id: row.familyId,
-        place_name: row.place.place_name,
-        address: row.place.address,
-        lat: row.place.lat,
-        lng: row.place.lng,
-        kakao_place_id: row.place.kakao_place_id,
-        radius_m: row.radiusM,
-      },
-      { onConflict: 'id', ignoreDuplicates: true }
-    )
+  const res = await supabase.from('list_locations').upsert(
+    {
+      id: row.id,
+      list_id: row.listId,
+      family_id: row.familyId,
+      place_name: row.place.place_name,
+      address: row.place.address,
+      lat: row.place.lat,
+      lng: row.place.lng,
+      kakao_place_id: row.place.kakao_place_id,
+      radius_m: row.radiusM,
+    },
+    { onConflict: 'id', ignoreDuplicates: true }
   );
+  if ((res.error as { code?: string } | null)?.code === '23505') return;
+  check(res);
 }
 
 export async function deleteLocation(id: string): Promise<void> {
