@@ -14,7 +14,8 @@ export async function verifyOtp(email: string, token: string): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
+  // 서버 호출 없이 이 기기의 세션만 지운다(오프라인에서도 로그아웃 가능).
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
   if (error) throw error;
 }
 

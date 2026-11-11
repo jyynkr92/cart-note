@@ -11,21 +11,31 @@ import {
   resetCurrentGroupStore,
 } from '@/src/groups/current-group-store';
 import {
+  createFamily,
   fetchFamilyMembers,
   fetchMyFamilies,
   leaveFamily,
   regenerateInviteCode,
+  renameFamily,
   type Family,
 } from '@/src/groups/group-api';
+import { toast } from '@/src/lib/toast';
+import { clearPendingInvite } from '@/src/onboarding/pending-invite';
 import { createQueryClient } from '@/src/lib/query-client';
 import { updateDisplayName } from '@/src/onboarding/profile-api';
 import { disposeClient } from '@/test-utils/dispose-client';
 
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
-jest.mock('expo-router', () => ({ useRouter: () => ({ replace: mockReplace, back: mockBack }) }));
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ replace: mockReplace, back: mockBack, push: mockPush }),
+}));
 jest.mock('@/src/lib/supabase', () => ({ supabase: {} }));
-jest.mock('@/src/lib/toast', () => ({ toast: { error: jest.fn() } }));
+jest.mock('@/src/lib/toast', () => ({ toast: { error: jest.fn(), info: jest.fn() } }));
+jest.mock('@/src/onboarding/pending-invite', () => ({
+  clearPendingInvite: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('@/src/items/item-api', () => ({}));
 jest.mock('@/src/auth/AuthProvider', () => ({
   useAuth: () => ({ session: { user: { id: 'u1' } }, loading: false }),
@@ -93,10 +103,39 @@ it('shows the invite code and member names, with a fallback for no name', async 
   expect(screen.getByText('이름 없음')).toBeTruthy();
 });
 
-it('copies the invite code', async () => {
+it('copies the invite code and confirms it', async () => {
   await ready();
   await fireEvent.press(screen.getByText('복사'));
   expect(Clipboard.setStringAsync).toHaveBeenCalledWith('012345');
+  await waitFor(() => expect(toast.info).toHaveBeenCalledWith('복사했어요'));
+});
+
+it('reports a copy failure instead of throwing', async () => {
+  (Clipboard.setStringAsync as jest.Mock).mockRejectedValueOnce(new Error('denied'));
+  await ready();
+  await fireEvent.press(screen.getByText('복사'));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('복사하지 못했어요'));
+  expect(toast.info).not.toHaveBeenCalled();
+});
+
+it('shows a message with a close button when the group cannot be loaded', async () => {
+  families.mockResolvedValue([]);
+  await renderSettings();
+  expect(await screen.findByText('그룹 정보를 불러올 수 없어요')).toBeTruthy();
+  await fireEvent.press(screen.getByText('닫기'));
+  expect(mockBack).toHaveBeenCalled();
+});
+
+it('regenerates only once on a double tap', async () => {
+  let finish!: (v: string) => void;
+  (regenerateInviteCode as jest.Mock).mockReturnValue(new Promise<string>((r) => (finish = r)));
+  await ready();
+  await fireEvent.press(screen.getByText('코드 재발급'));
+  const confirm = await screen.findByText('재발급');
+  await fireEvent.press(confirm);
+  await fireEvent.press(confirm);
+  await act(async () => finish('555555'));
+  expect(regenerateInviteCode).toHaveBeenCalledTimes(1);
 });
 
 it('shares a message with the code and the deep link', async () => {
@@ -168,7 +207,7 @@ describe('leaving the group', () => {
     expect(screen.queryByText('999888')).toBeNull();
   });
 
-  it('leaves the guard to handle the no-group case', async () => {
+  it('goes home after leaving the last group, so the guard can create or join one', async () => {
     (leaveFamily as jest.Mock).mockResolvedValue(undefined);
     families.mockResolvedValue([G1]);
     await ready();
@@ -176,8 +215,9 @@ describe('leaving the group', () => {
     await fireEvent.press(screen.getByText('그룹 나가기'));
     await fireEvent.press(await screen.findByText('나가기'));
     await waitFor(() => expect(leaveFamily).toHaveBeenCalledWith('g1'));
-    expect(mockReplace).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
     expect(screen.queryByText('012345')).toBeNull();
+    expect(screen.queryByText('그룹 정보를 불러올 수 없어요')).toBeNull();
   });
 });
 
@@ -195,18 +235,88 @@ describe('changing my name', () => {
     expect(updateDisplayName).not.toHaveBeenCalled();
   });
 
-  it('saves the trimmed name', async () => {
+  it('saves the trimmed name and refreshes the member lists of my groups', async () => {
     (updateDisplayName as jest.Mock).mockResolvedValue(undefined);
     const input = await open();
+    const spy = jest.spyOn(client, 'invalidateQueries');
     await fireEvent.changeText(input, '  정이  ');
     await fireEvent.press(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(updateDisplayName).toHaveBeenCalledWith('u1', '정이'));
+    await waitFor(() => {
+      const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] }).queryKey);
+      expect(keys).toEqual(expect.arrayContaining([['members', 'g1'], ['members', 'g2']]));
+    });
   });
 });
 
-it('signs out', async () => {
-  (signOut as jest.Mock).mockResolvedValue(undefined);
-  await ready();
-  await fireEvent.press(screen.getByText('로그아웃'));
-  await waitFor(() => expect(signOut).toHaveBeenCalled());
+describe('group management', () => {
+  it('renames the current group', async () => {
+    (renameFamily as jest.Mock).mockResolvedValue(undefined);
+    await ready();
+    await fireEvent.press(screen.getByText('그룹 이름 변경'));
+    const input = await screen.findByDisplayValue('우리집');
+    await fireEvent.changeText(input, '  우리 집  ');
+    await fireEvent.press(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(renameFamily).toHaveBeenCalledWith('g1', '우리 집'));
+  });
+
+  it('blocks a whitespace-only group name', async () => {
+    await ready();
+    await fireEvent.press(screen.getByText('그룹 이름 변경'));
+    await fireEvent.changeText(await screen.findByDisplayValue('우리집'), '   ');
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
+  });
+
+  it('creates a new group and selects it', async () => {
+    const G3 = fam('g3', '친구들', '2026-03-01T00:00:00Z', '333333');
+    (createFamily as jest.Mock).mockImplementation(async () => {
+      families.mockResolvedValue([G1, G2, G3]);
+      return 'g3';
+    });
+    await ready();
+    await fireEvent.press(screen.getByText('새 그룹 만들기'));
+    await fireEvent.changeText(await screen.findByPlaceholderText('그룹 이름'), '친구들');
+    await fireEvent.press(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(createFamily).toHaveBeenCalledWith('친구들'));
+    expect(await screen.findByText('333333')).toBeTruthy();
+    expect(await AsyncStorage.getItem(CURRENT_GROUP_KEY)).toBe('g3');
+  });
+
+  it('opens join by code, even with a single group', async () => {
+    families.mockResolvedValue([G1]);
+    await ready();
+    await fireEvent.press(screen.getByText('코드로 참여'));
+    expect(mockPush).toHaveBeenCalledWith('/join');
+  });
+});
+
+describe('signing out', () => {
+  it('clears the pending invite before signing out', async () => {
+    const order: string[] = [];
+    (clearPendingInvite as jest.Mock).mockImplementation(async () => void order.push('clear'));
+    (signOut as jest.Mock).mockImplementation(async () => void order.push('signOut'));
+    await ready();
+    await fireEvent.press(screen.getByText('로그아웃'));
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    expect(order).toEqual(['clear', 'signOut']);
+  });
+
+  it('asks first when unsynced changes are queued', async () => {
+    (signOut as jest.Mock).mockResolvedValue(undefined);
+    await ready();
+    jest.spyOn(client, 'isMutating').mockReturnValue(1);
+    await fireEvent.press(screen.getByText('로그아웃'));
+    expect(await screen.findByText('동기화되지 않은 변경이 사라져요.')).toBeTruthy();
+    expect(signOut).not.toHaveBeenCalled();
+    const buttons = screen.getAllByRole('button', { name: '로그아웃' });
+    await fireEvent.press(buttons[buttons.length - 1]);
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+  });
+
+  it('reports a failed sign-out', async () => {
+    (signOut as jest.Mock).mockRejectedValue(new Error('x'));
+    await ready();
+    await fireEvent.press(screen.getByText('로그아웃'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('로그아웃하지 못했어요'));
+  });
 });

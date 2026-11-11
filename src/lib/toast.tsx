@@ -26,6 +26,8 @@ function push(message: string) {
 
 export const toast = {
   error: (message: string) => push(message),
+  /** 오류가 아닌 짧은 확인 메시지(예: 복사했어요). */
+  info: (message: string) => push(message),
 };
 
 /** 루트 레이아웃에 한 번 렌더링한다. */

@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Share, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,14 +18,16 @@ import { NearbyAlertToggle } from '@/src/geofence/NearbyAlertToggle';
 import { signOut } from '@/src/auth/auth-api';
 import { resolveCurrentFamily, useCurrentGroupStore } from '@/src/groups/current-group-store';
 import { leaveFamily, regenerateInviteCode } from '@/src/groups/group-api';
+import { useGroupNameDialog } from '@/src/groups/GroupNameDialog';
 import { useCurrentGroup, useFamilyMembers } from '@/src/groups/use-groups';
-import { qk } from '@/src/lib/query-keys';
+import { mk, qk } from '@/src/lib/query-keys';
 import { normalizeName } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
 import { useTopInset } from '@/src/lib/use-top-inset';
+import { clearPendingInvite } from '@/src/onboarding/pending-invite';
 import { updateDisplayName } from '@/src/onboarding/profile-api';
 
-type Mode = 'regenerate' | 'leave' | 'name' | null;
+type Mode = 'regenerate' | 'leave' | 'name' | 'logout' | null;
 
 export default function Settings() {
   const router = useRouter();
@@ -39,6 +41,9 @@ export default function Settings() {
   const [mode, setMode] = useState<Mode>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  // 상태 갱신 전에 두 번 눌러도 한 번만 실행되게 하는 잠금(재발급/나가기/이름 저장/로그아웃).
+  const inFlight = useRef(false);
+  const groupName = useGroupNameDialog(family);
   // 나간 뒤에는 목록이 갱신되며 다른 그룹/빈 화면이 잠깐 비치지 않도록 계속 로딩을 보여 준다.
   const [leaving, setLeaving] = useState(false);
 
@@ -48,7 +53,12 @@ export default function Settings() {
         <ActivityIndicator />
       </View>
     ) : (
-      <View className="flex-1 bg-background" />
+      <View className="flex-1 items-center justify-center gap-4 bg-background px-6">
+        <Text>그룹 정보를 불러올 수 없어요</Text>
+        <Button variant="outline" onPress={() => router.back()}>
+          <Text>닫기</Text>
+        </Button>
+      </View>
     );
   }
 
@@ -57,7 +67,12 @@ export default function Settings() {
   const myName = members.data?.find((m) => m.user_id === userId)?.display_name ?? '';
 
   async function copy() {
-    await Clipboard.setStringAsync(inviteCode);
+    try {
+      await Clipboard.setStringAsync(inviteCode);
+      toast.info('복사했어요');
+    } catch {
+      toast.error('복사하지 못했어요');
+    }
   }
 
   async function invite() {
@@ -70,16 +85,27 @@ export default function Settings() {
     }
   }
 
-  async function run(fn: () => Promise<void>, failure: string) {
-    if (busy) return;
+  function lock(): boolean {
+    if (inFlight.current) return false;
+    inFlight.current = true;
     setBusy(true);
+    return true;
+  }
+
+  function unlock() {
+    inFlight.current = false;
+    setBusy(false);
+  }
+
+  async function run(fn: () => Promise<void>, failure: string) {
+    if (!lock()) return;
     try {
       await fn();
       setMode(null);
     } catch {
       toast.error(failure);
     } finally {
-      setBusy(false);
+      unlock();
     }
   }
 
@@ -93,19 +119,21 @@ export default function Settings() {
     run(async () => {
       if (!trimmed || !userId) return;
       await updateDisplayName(userId, trimmed);
-      await qc.invalidateQueries({ queryKey: ['members'] });
+      // 내 이름은 내가 속한 모든 그룹의 멤버 목록에 보인다.
+      await Promise.all(
+        families.map((f) => qc.invalidateQueries({ queryKey: qk.members(f.id) }))
+      );
     }, '이름을 저장하지 못했어요');
 
   async function leave() {
-    if (busy) return;
-    setBusy(true);
+    if (!lock()) return;
     const leftId = family!.id;
     const remaining = families.filter((f) => f.id !== leftId);
     try {
       await leaveFamily(leftId);
     } catch {
       toast.error('그룹에서 나가지 못했어요');
-      setBusy(false);
+      unlock();
       return;
     }
     setLeaving(true);
@@ -118,15 +146,29 @@ export default function Settings() {
         : undefined,
       qc.invalidateQueries({ queryKey: qk.families(), refetchType: 'all' }),
     ]);
-    // 남은 그룹이 없으면 온보딩 가드가 개인 그룹 생성/참여 흐름으로 보낸다.
-    if (next) router.replace('/');
+    // 남은 그룹이 없으면 위의 온보딩 재조회가 개인 그룹을 만들고(또는 참여 화면으로 보내고) 끝난다.
+    // 어느 쪽이든 홈으로 보내야 나가기 로딩 화면에 머물지 않는다.
+    router.replace('/');
+  }
+
+  function requestLogout() {
+    // 오프라인 큐에 남은 변경은 로그아웃하면 캐시와 함께 사라진다.
+    if (qc.isMutating({ mutationKey: mk.all }) > 0) setMode('logout');
+    else void logout();
   }
 
   async function logout() {
+    if (!lock()) return;
     try {
+      // SIGNED_OUT 이벤트가 아니라 여기서 지운다: 콜드 스타트 토큰 갱신 실패도 SIGNED_OUT을 보내므로
+      // 거기서 지우면 방금 받은 초대 링크가 사라진다.
+      await clearPendingInvite().catch(() => {});
       await signOut();
+      setMode(null);
     } catch {
       toast.error('로그아웃하지 못했어요');
+    } finally {
+      unlock();
     }
   }
 
@@ -156,6 +198,9 @@ export default function Settings() {
         <Button variant="ghost" onPress={() => setMode('regenerate')}>
           <Text>코드 재발급</Text>
         </Button>
+        <Button variant="outline" onPress={() => groupName.open('rename')}>
+          <Text>그룹 이름 변경</Text>
+        </Button>
       </View>
 
       <View className="gap-2">
@@ -163,6 +208,16 @@ export default function Settings() {
         {(members.data ?? []).map((m) => (
           <Text key={m.user_id}>{m.display_name ?? '이름 없음'}</Text>
         ))}
+      </View>
+
+      <View className="gap-2">
+        <Text className="text-sm text-muted-foreground">다른 그룹</Text>
+        <Button variant="outline" onPress={() => groupName.open('create')}>
+          <Text>새 그룹 만들기</Text>
+        </Button>
+        <Button variant="outline" onPress={() => router.push('/join')}>
+          <Text>코드로 참여</Text>
+        </Button>
       </View>
 
       <View className="gap-2">
@@ -182,7 +237,7 @@ export default function Settings() {
         <Button variant="outline" onPress={() => setMode('leave')}>
           <Text>그룹 나가기</Text>
         </Button>
-        <Button variant="ghost" onPress={() => void logout()}>
+        <Button variant="ghost" onPress={requestLogout} disabled={busy}>
           <Text>로그아웃</Text>
         </Button>
       </View>
@@ -234,6 +289,25 @@ export default function Settings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={mode === 'logout'} onOpenChange={(o) => !o && setMode(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>로그아웃할까요?</DialogTitle>
+          </DialogHeader>
+          <Text>동기화되지 않은 변경이 사라져요.</Text>
+          <DialogFooter>
+            <Button variant="outline" onPress={() => setMode(null)}>
+              <Text>취소</Text>
+            </Button>
+            <Button variant="destructive" onPress={() => void logout()} disabled={busy}>
+              <Text>로그아웃</Text>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {groupName.dialog}
     </ScrollView>
   );
 }

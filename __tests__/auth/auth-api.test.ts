@@ -1,6 +1,15 @@
-import { parseAuthFragment } from '@/src/auth/auth-api';
+import { parseAuthFragment, signOut } from '@/src/auth/auth-api';
+import { supabase } from '@/src/lib/supabase';
 
-jest.mock('@/src/lib/supabase', () => ({ supabase: { auth: {} } }));
+jest.mock('@/src/lib/supabase', () => ({ supabase: { auth: { signOut: jest.fn() } } }));
+
+describe('signOut', () => {
+  it('signs out locally so it works offline', async () => {
+    (supabase.auth.signOut as jest.Mock).mockResolvedValue({ error: null });
+    await signOut();
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+});
 
 describe('parseAuthFragment', () => {
   it('parses tokens from the fragment', () => {
