@@ -1,4 +1,6 @@
+import { onlineManager } from '@tanstack/react-query';
 import { Redirect, Stack } from 'expo-router';
+import { useSyncExternalStore } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -33,10 +35,30 @@ export default function AppLayout() {
         <Redirect href={{ pathname: '/join', params: pendingInvite ? { code: pendingInvite } : {} }} />
       );
     case 'ready':
-      return <Stack screenOptions={{ headerShown: false }} />;
+      return (
+        <View className="flex-1 bg-background">
+          <OfflineBanner />
+          <Stack screenOptions={{ headerShown: false }} />
+        </View>
+      );
     default: // null(로딩), 'create-personal'(개인 그룹 생성 중)
       return <Loading />;
   }
+}
+
+/** 모든 (app) 화면 위에 노출된다. NetInfo가 onlineManager를 갱신한다. */
+function OfflineBanner() {
+  const online = useSyncExternalStore(
+    (cb) => onlineManager.subscribe(cb),
+    () => onlineManager.isOnline(),
+    () => true
+  );
+  if (online) return null;
+  return (
+    <View className="bg-muted px-4 pb-2 pt-12">
+      <Text className="text-center text-sm text-muted-foreground">오프라인</Text>
+    </View>
+  );
 }
 
 function Loading() {

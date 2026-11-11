@@ -1,7 +1,9 @@
 import { supabase } from '@/src/lib/supabase';
 import type { Database } from '@/src/lib/database.types';
 
-export type List = Database['public']['Tables']['lists']['Row'];
+type ListRow = Database['public']['Tables']['lists']['Row'];
+/** 표시용 파생 값은 조회 시에만 채워진다(낙관적으로 만든 목록에는 없을 수 있다). */
+export type List = ListRow & { unfinished_count?: number; has_location?: boolean };
 export type ListKind = List['kind'];
 
 function check(res: { error: unknown }) {
@@ -11,12 +13,18 @@ function check(res: { error: unknown }) {
 export async function fetchLists(familyId: string): Promise<List[]> {
   const res = await supabase
     .from('lists')
-    .select('*')
+    .select('*, items(count), list_locations(count)')
     .eq('family_id', familyId)
+    .eq('items.is_done', false)
     .order('sort_order')
     .order('created_at');
   check(res);
-  return res.data ?? [];
+  type Row = ListRow & { items: { count: number }[] | null; list_locations: { count: number }[] | null };
+  return ((res.data ?? []) as unknown as Row[]).map(({ items, list_locations, ...list }) => ({
+    ...list,
+    unfinished_count: items?.[0]?.count ?? 0,
+    has_location: (list_locations?.[0]?.count ?? 0) > 0,
+  }));
 }
 
 export async function insertList(row: {
