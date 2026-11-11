@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { Settings } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { GroupSwitcher } from '@/src/groups/GroupSwitcher';
@@ -59,7 +61,16 @@ export default function Home() {
 
   return (
     <View className="flex-1 gap-4 bg-background px-4" style={{ paddingTop }}>
-      <GroupSwitcher family={family} families={families} />
+      <View className="flex-row items-center justify-between">
+        <GroupSwitcher family={family} families={families} />
+        <Button
+          variant="ghost"
+          size="icon"
+          accessibilityLabel="설정"
+          onPress={() => router.push('/settings')}>
+          <Icon as={Settings} className="size-5" />
+        </Button>
+      </View>
       {lists.isPending && lists.fetchStatus === 'paused' ? (
         <View className="flex-1 items-center justify-center">
           <Text>오프라인이라 불러올 수 없어요</Text>

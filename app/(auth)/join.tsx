@@ -3,10 +3,18 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { GroupError, joinFamily, type GroupErrorCode } from '@/src/groups/group-api';
+import { loadEmptySoloGroups } from '@/src/groups/empty-group-cleanup';
+import { GroupError, joinFamily, leaveFamily, type GroupErrorCode } from '@/src/groups/group-api';
 import { qk } from '@/src/lib/query-keys';
 import { normalizeInviteCode } from '@/src/lib/text';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
@@ -26,6 +34,8 @@ export default function Join() {
   const [code, setCode] = useState(() => normalizeInviteCode(params.code ?? '') ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 참여 후 정리를 물어볼 빈 개인 그룹(하나씩 차례로 묻는다)
+  const [cleanup, setCleanup] = useState<Array<{ id: string; name: string }>>([]);
 
   // 딥링크로 저장된 대기 코드 미리 채우기
   useEffect(() => {
@@ -54,18 +64,38 @@ export default function Join() {
     ]);
   }
 
+  async function finish() {
+    await refreshOnboarding();
+    router.replace('/');
+  }
+
+  async function answer(remove: boolean) {
+    const [current, ...rest] = cleanup;
+    if (!current || busy) return;
+    setBusy(true);
+    try {
+      if (remove) await leaveFamily(current.id);
+    } catch {
+      // 정리는 부가 기능이라 실패해도 계속 진행한다.
+    }
+    setCleanup(rest);
+    if (!rest.length) await finish();
+    setBusy(false);
+  }
+
   async function submit() {
     if (!normalized || busy) return;
     setBusy(true);
     setError(null);
     try {
-      await joinFamily(normalized);
+      const joinedId = await joinFamily(normalized);
       await clearPendingInvite();
-      await refreshOnboarding();
-      router.replace('/');
+      const empties = await loadEmptySoloGroups(joinedId);
+      if (empties.length) setCleanup(empties);
+      else await finish();
     } catch (e) {
       const c = e instanceof GroupError ? e.code : 'network';
-      if (c === 'already_member') await clearPendingInvite();
+      if (c === 'already_member' || c === 'invalid_code') await clearPendingInvite();
       setError(ERROR_MESSAGES[c] ?? ERROR_MESSAGES.network!);
     } finally {
       setBusy(false);
@@ -95,6 +125,21 @@ export default function Join() {
       <Button variant="ghost" onPress={skip}>
         <Text>나중에 할게요</Text>
       </Button>
+      <Dialog open={cleanup.length > 0} onOpenChange={(open) => !open && void answer(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{`비어 있는 '${cleanup[0]?.name ?? ''}' 그룹을 삭제할까요?`}</DialogTitle>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onPress={() => void answer(false)}>
+              <Text>유지</Text>
+            </Button>
+            <Button variant="destructive" onPress={() => void answer(true)}>
+              <Text>삭제</Text>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </View>
   );
 }

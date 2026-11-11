@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
+import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { clearUserCache } from '@/src/lib/query-client';
 import { supabase } from '@/src/lib/supabase';
 import { capturePendingInvite } from '@/src/onboarding/pending-invite';
@@ -41,7 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event, next) => {
       // 같은 기기의 다른 사용자가 이전 캐시(오프라인 큐 포함)를 보지 못하게 로그아웃 시 즉시 비운다.
-      if (event === 'SIGNED_OUT') void clearUserCache().catch(() => {});
+      if (event === 'SIGNED_OUT') {
+        void clearUserCache().catch(() => {});
+        void clearCurrentGroup();
+      }
       setSession(next);
       setLoading(false);
     });

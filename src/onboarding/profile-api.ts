@@ -17,3 +17,12 @@ export async function createProfile(userId: string, displayName: string): Promis
     .insert({ user_id: userId, display_name: displayName });
   if (error) throw error;
 }
+
+/** display_name 컬럼만 UPDATE한다(grant 범위). */
+export async function updateDisplayName(userId: string, displayName: string): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ display_name: displayName })
+    .eq('user_id', userId);
+  if (error) throw error;
+}

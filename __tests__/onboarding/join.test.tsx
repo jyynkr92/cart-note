@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { PortalHost } from '@rn-primitives/portal';
 import Join from '@/app/(auth)/join';
-import { GroupError, joinFamily } from '@/src/groups/group-api';
+import { loadEmptySoloGroups } from '@/src/groups/empty-group-cleanup';
+import { GroupError, joinFamily, leaveFamily } from '@/src/groups/group-api';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
 
 const mockReplace = jest.fn();
@@ -13,6 +15,10 @@ jest.mock('expo-router', () => ({
 jest.mock('@/src/groups/group-api', () => ({
   ...jest.requireActual('@/src/groups/group-api'),
   joinFamily: jest.fn(),
+  leaveFamily: jest.fn(),
+}));
+jest.mock('@/src/groups/empty-group-cleanup', () => ({
+  loadEmptySoloGroups: jest.fn().mockResolvedValue([]),
 }));
 jest.mock('@/src/onboarding/pending-invite', () => ({
   getPendingInvite: jest.fn().mockResolvedValue(null),
@@ -30,12 +36,14 @@ const renderJoin = () =>
   render(
     <QueryClientProvider client={(testClient = new QueryClient())}>
       <Join />
+      <PortalHost />
     </QueryClientProvider>
   );
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockParams = {};
+  (loadEmptySoloGroups as jest.Mock).mockResolvedValue([]);
 });
 
 async function submit(code = '123456') {
@@ -101,4 +109,50 @@ it('invalidates onboarding and families after joining', async () => {
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
   const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] }).queryKey);
   expect(keys).toEqual(expect.arrayContaining([['onboarding', 'u1'], ['families']]));
+});
+
+it('clears the pending invite on invalid_code so it is not retried', async () => {
+  join.mockRejectedValue(new GroupError('invalid_code'));
+  await submit();
+  expect(await screen.findByText('초대 코드를 찾을 수 없어요')).toBeTruthy();
+  expect(clearPendingInvite).toHaveBeenCalled();
+});
+
+describe('empty solo group cleanup', () => {
+  beforeEach(() => join.mockResolvedValue('j'));
+
+  it('asks with the group name and leaves it on [삭제]', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
+    (leaveFamily as jest.Mock).mockResolvedValue(undefined);
+    await submit();
+    expect(await screen.findByText("비어 있는 '내 장보기' 그룹을 삭제할까요?")).toBeTruthy();
+    expect(mockReplace).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('삭제'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(leaveFamily).toHaveBeenCalledWith('solo');
+    expect(loadEmptySoloGroups).toHaveBeenCalledWith('j');
+  });
+
+  it('does not leave on [유지]', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
+    await submit();
+    await fireEvent.press(await screen.findByText('유지'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(leaveFamily).not.toHaveBeenCalled();
+  });
+
+  it('prompts once per group, in sequence', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([
+      { id: 'a', name: '하나' },
+      { id: 'b', name: '둘' },
+    ]);
+    (leaveFamily as jest.Mock).mockResolvedValue(undefined);
+    await submit();
+    await fireEvent.press(await screen.findByText('삭제'));
+    expect(await screen.findByText("비어 있는 '둘' 그룹을 삭제할까요?")).toBeTruthy();
+    await fireEvent.press(screen.getByText('유지'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(leaveFamily).toHaveBeenCalledTimes(1);
+    expect(leaveFamily).toHaveBeenCalledWith('a');
+  });
 });

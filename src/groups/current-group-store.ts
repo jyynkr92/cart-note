@@ -39,6 +39,14 @@ function setFamilyId(id: string) {
   AsyncStorage.setItem(CURRENT_GROUP_KEY, id).catch(() => {});
 }
 
+/** 로그아웃 시: 저장된 현재 그룹과 메모리 선택을 모두 지운다. */
+export async function clearCurrentGroup(): Promise<void> {
+  version++;
+  hydrating = null;
+  set({ familyId: null, ready: true });
+  await AsyncStorage.removeItem(CURRENT_GROUP_KEY).catch(() => {});
+}
+
 /** 테스트용: 메모리 상태만 초기화한다. */
 export function resetCurrentGroupStore() {
   version++;

@@ -51,3 +51,6 @@ afterAll(() => {
   const { View } = require('react-native');
   View.prototype.measure = originalMeasure;
 });
+
+// expo-clipboard는 네이티브 모듈이라 Jest에서는 대체한다.
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn().mockResolvedValue(true) }));

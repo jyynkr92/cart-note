@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { Family } from '@/src/groups/group-api';
 import {
   CURRENT_GROUP_KEY,
+  clearCurrentGroup,
   resetCurrentGroupStore,
   resolveCurrentFamily,
   useCurrentGroupStore,
@@ -57,5 +58,19 @@ describe('useCurrentGroupStore', () => {
     await act(async () => result.current.setFamilyId('a'));
     expect(result.current.familyId).toBe('a');
     expect(await AsyncStorage.getItem(CURRENT_GROUP_KEY)).toBe('a');
+  });
+});
+
+describe('clearCurrentGroup', () => {
+  it('removes the saved key and the in-memory selection', async () => {
+    await AsyncStorage.setItem(CURRENT_GROUP_KEY, 'a');
+    resetCurrentGroupStore();
+    const { result } = await renderHook(() => useCurrentGroupStore());
+    await waitFor(() => expect(result.current.familyId).toBe('a'));
+    await act(async () => {
+      await clearCurrentGroup();
+    });
+    expect(result.current.familyId).toBeNull();
+    expect(await AsyncStorage.getItem(CURRENT_GROUP_KEY)).toBeNull();
   });
 });

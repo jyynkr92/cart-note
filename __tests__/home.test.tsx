@@ -243,3 +243,9 @@ describe('offline banner', () => {
     await waitFor(() => expect(screen.queryByText('오프라인')).toBeNull());
   });
 });
+
+it('opens settings from the header gear button', async () => {
+  await renderWithClient(<Home />);
+  await fireEvent.press(await screen.findByLabelText('설정'));
+  expect(mockPush).toHaveBeenCalledWith('/settings');
+});
