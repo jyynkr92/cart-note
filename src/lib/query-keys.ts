@@ -21,4 +21,6 @@ export const mk = {
   createList: ['m', 'lists', 'create'] as const,
   renameList: ['m', 'lists', 'rename'] as const,
   deleteList: ['m', 'lists', 'delete'] as const,
+  addLocation: ['m', 'locations', 'add'] as const,
+  deleteLocation: ['m', 'locations', 'delete'] as const,
 };

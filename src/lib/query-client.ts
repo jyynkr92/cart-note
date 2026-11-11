@@ -5,6 +5,7 @@ import { defaultShouldDehydrateQuery, onlineManager, QueryClient } from '@tansta
 import type { PersistQueryClientProviderProps } from '@tanstack/react-query-persist-client';
 import { registerItemMutations } from '@/src/items/use-items';
 import { registerListMutations } from '@/src/lists/use-lists';
+import { registerLocationMutations } from '@/src/locations/use-locations';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CACHE_KEY = 'cart-note-query-cache';
@@ -21,6 +22,7 @@ export function createQueryClient(): QueryClient {
   });
   registerItemMutations(client);
   registerListMutations(client);
+  registerLocationMutations(client);
   return client;
 }
 

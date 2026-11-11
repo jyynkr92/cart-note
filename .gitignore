@@ -47,3 +47,6 @@ example
 
 # local env (keep .env.example tracked)
 .env
+
+# Edge Function local secrets (keep .env.example tracked)
+supabase/functions/.env
