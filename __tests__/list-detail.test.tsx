@@ -284,6 +284,28 @@ describe('menu', () => {
     expect(mockReplace).toHaveBeenCalledWith('/');
   });
 
+  it('does not flash the not-found state while deleting, nor refetch items', async () => {
+    await renderWithClient(<ListDetail />);
+    await waitFor(() => expect(items).toHaveBeenCalledTimes(1));
+    // 서버에서도 삭제됐으므로 이후 재조회는 목록을 돌려주지 않는다.
+    (deleteList as jest.Mock).mockImplementationOnce(async () => lists.mockResolvedValue([]));
+    await openMenu();
+    await fireEvent.press(await screen.findByText('목록 삭제'));
+    await fireEvent.press(await screen.findByRole('button', { name: '삭제' }));
+    await waitFor(() => expect(deleteList).toHaveBeenCalledWith('l1'));
+    expect(screen.queryByText('목록을 찾을 수 없어요')).toBeNull();
+    expect(items).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not delete the list when the confirmation is cancelled', async () => {
+    await renderWithClient(<ListDetail />);
+    await openMenu();
+    await fireEvent.press(await screen.findByText('목록 삭제'));
+    await fireEvent.press(await screen.findByText('취소'));
+    expect(deleteList).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
   it('renames the list and blocks a whitespace-only name', async () => {
     await renderWithClient(<ListDetail />);
     await openMenu();
@@ -300,6 +322,14 @@ describe('menu', () => {
 });
 
 describe('unusual states', () => {
+  it('shows an offline state instead of a spinner when paused with no data', async () => {
+    client.setQueryData(['families'], [G1]);
+    onlineManager.setOnline(false);
+    await renderWithClient(<ListDetail />);
+    expect(await screen.findByText('오프라인이라 불러올 수 없어요')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '다시 시도' })).toBeNull();
+  });
+
   it('shows a not-found state with a way home when the list is not in the group', async () => {
     mockParams = { id: 'gone' };
     await renderWithClient(<ListDetail />);

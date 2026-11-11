@@ -62,6 +62,8 @@ export default function ListDetail() {
   const [editing, setEditing] = useState<Item | null>(null);
   const [mode, setMode] = useState<Mode>(null);
   const [listName, setListName] = useState('');
+  // 삭제 직후 캐시에서 목록이 먼저 사라져도 "찾을 수 없어요"가 깜빡이지 않게 한다.
+  const [deleting, setDeleting] = useState(false);
 
   const goHome = () => router.replace('/');
   const wrap = (children: React.ReactNode) => (
@@ -70,6 +72,16 @@ export default function ListDetail() {
     </View>
   );
 
+  if (deleting) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator />
+      </View>
+    );
+  }
+  if (family && lists.isPending && lists.fetchStatus === 'paused') {
+    return wrap(<OfflineState />);
+  }
   if (!family || (lists.isPending && !lists.isError)) {
     return !family && !loading ? (
       <View className="flex-1 bg-background" />
@@ -121,6 +133,7 @@ export default function ListDetail() {
 
   function confirmDelete() {
     if (!familyId) return;
+    setDeleting(true);
     deleteList.mutate({ id: listId, familyId });
     setMode(null);
     goHome();
@@ -187,7 +200,9 @@ export default function ListDetail() {
         returnKeyType="done"
       />
 
-      {items.isError && !items.data ? (
+      {items.isPending && items.fetchStatus === 'paused' ? (
+        <OfflineState />
+      ) : items.isError && !items.data ? (
         <ErrorState onRetry={() => void items.refetch()} />
       ) : items.isPending ? (
         <View className="flex-1 items-center justify-center">
@@ -283,6 +298,14 @@ export default function ListDetail() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function OfflineState() {
+  return (
+    <View className="flex-1 items-center justify-center">
+      <Text>오프라인이라 불러올 수 없어요</Text>
+    </View>
   );
 }
 

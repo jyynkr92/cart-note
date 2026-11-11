@@ -4,12 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { useIsOnline } from '@/src/lib/use-top-inset';
+import { useIsOnline } from '@/src/lib/use-online';
 import { useOnboarding } from '@/src/onboarding/use-onboarding';
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
-  const { step, pendingInvite, error, retry } = useOnboarding(loading ? null : (session?.user.id ?? null));
+  const { step, pendingInvite, error, retry } = useOnboarding(
+    loading ? null : (session?.user.id ?? null)
+  );
 
   if (loading) return <Loading />;
   if (!session) return <Redirect href="/login" />;
@@ -32,7 +34,9 @@ export default function AppLayout() {
       return <Redirect href="/profile" />;
     case 'join-pending':
       return (
-        <Redirect href={{ pathname: '/join', params: pendingInvite ? { code: pendingInvite } : {} }} />
+        <Redirect
+          href={{ pathname: '/join', params: pendingInvite ? { code: pendingInvite } : {} }}
+        />
       );
     case 'ready':
       return (

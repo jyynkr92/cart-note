@@ -60,7 +60,11 @@ export default function Home() {
   return (
     <View className="flex-1 gap-4 bg-background px-4" style={{ paddingTop }}>
       <GroupSwitcher family={family} families={families} />
-      {lists.isError && !lists.data ? (
+      {lists.isPending && lists.fetchStatus === 'paused' ? (
+        <View className="flex-1 items-center justify-center">
+          <Text>오프라인이라 불러올 수 없어요</Text>
+        </View>
+      ) : lists.isError && !lists.data ? (
         <View className="flex-1 items-center justify-center gap-4">
           <Text>불러오지 못했어요</Text>
           <Button onPress={() => void lists.refetch()}>
@@ -68,25 +72,25 @@ export default function Home() {
           </Button>
         </View>
       ) : (
-      <ScrollView contentContainerClassName="gap-3 pb-6">
-        {sortLists(lists.data ?? []).map((item) => (
-          <ListCard
-            key={item.id}
-            list={item}
-            onPress={() => router.push({ pathname: '/list/[id]', params: { id: item.id } })}
-          />
-        ))}
-        <View className="gap-4">
-          <Button variant="outline" onPress={openAdd}>
-            <Text>+ 목록 추가</Text>
-          </Button>
-          {members.data?.length === 1 ? (
-            <Text className="text-center text-sm text-muted-foreground">
-              가족을 초대해 함께 써보세요
-            </Text>
-          ) : null}
-        </View>
-      </ScrollView>
+        <ScrollView contentContainerClassName="gap-3 pb-6">
+          {sortLists(lists.data ?? []).map((item) => (
+            <ListCard
+              key={item.id}
+              list={item}
+              onPress={() => router.push({ pathname: '/list/[id]', params: { id: item.id } })}
+            />
+          ))}
+          <View className="gap-4">
+            <Button variant="outline" onPress={openAdd}>
+              <Text>+ 목록 추가</Text>
+            </Button>
+            {members.data?.length === 1 ? (
+              <Text className="text-center text-sm text-muted-foreground">
+                가족을 초대해 함께 써보세요
+              </Text>
+            ) : null}
+          </View>
+        </ScrollView>
       )}
 
       <Dialog open={adding} onOpenChange={setAdding}>

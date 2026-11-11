@@ -60,19 +60,17 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      <PersistQueryClientProvider
-        client={queryClient}
-        persistOptions={persistOptions}>
-        <AuthProvider>
-          <CacheOwnerGuard />
-          <RootNavigator />
-        </AuthProvider>
-      </PersistQueryClientProvider>
-      <PortalHost />
-      <ToastHost />
-    </ThemeProvider>
+      <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+          <AuthProvider>
+            <CacheOwnerGuard />
+            <RootNavigator />
+          </AuthProvider>
+        </PersistQueryClientProvider>
+        <PortalHost />
+        <ToastHost />
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }

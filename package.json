@@ -62,7 +62,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "expo customize tsconfig.json && tsc --noEmit"
   },
   "private": true
 }

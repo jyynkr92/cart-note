@@ -214,6 +214,13 @@ describe('add list', () => {
 });
 
 describe('load error', () => {
+  it('shows an offline state instead of a spinner when paused with no data', async () => {
+    client.setQueryData(['families'], [G1]);
+    onlineManager.setOnline(false);
+    await renderWithClient(<Home />);
+    expect(await screen.findByText('오프라인이라 불러올 수 없어요')).toBeTruthy();
+  });
+
   it('shows a retry state when the lists failed to load and retries on press', async () => {
     client.setDefaultOptions({ queries: { retry: false } });
     lists.mockRejectedValueOnce(new Error('network'));
