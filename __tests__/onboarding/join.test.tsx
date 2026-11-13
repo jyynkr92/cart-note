@@ -4,7 +4,7 @@ import { PortalHost } from '@rn-primitives/portal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Join from '@/app/(auth)/join';
 import { loadEmptySoloGroups } from '@/src/groups/empty-group-cleanup';
-import { GroupError, joinFamily, leaveFamily } from '@/src/groups/group-api';
+import { GroupError, deleteFamilyIfEmpty, joinFamily, leaveFamily } from '@/src/groups/group-api';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
 import { CURRENT_GROUP_KEY, resetCurrentGroupStore } from '@/src/groups/current-group-store';
 import { toast } from '@/src/lib/toast';
@@ -21,6 +21,7 @@ jest.mock('@/src/groups/group-api', () => ({
   ...jest.requireActual('@/src/groups/group-api'),
   joinFamily: jest.fn(),
   leaveFamily: jest.fn(),
+  deleteFamilyIfEmpty: jest.fn(),
 }));
 jest.mock('@/src/groups/empty-group-cleanup', () => ({
   loadEmptySoloGroups: jest.fn().mockResolvedValue([]),
@@ -150,15 +151,17 @@ it('clears the pending invite on invalid_code so it is not retried', async () =>
 describe('empty solo group cleanup', () => {
   beforeEach(() => join.mockResolvedValue('j'));
 
-  it('asks with the group name and leaves it on [삭제]', async () => {
+  it('asks with the group name and deletes it atomically on [삭제] (B9)', async () => {
     (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
-    (leaveFamily as jest.Mock).mockResolvedValue(undefined);
+    (deleteFamilyIfEmpty as jest.Mock).mockResolvedValue(true);
     await submit();
     expect(await screen.findByText("비어 있는 '내 장보기' 그룹을 삭제할까요?")).toBeTruthy();
     expect(mockReplace).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByText('삭제'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
-    expect(leaveFamily).toHaveBeenCalledWith('solo');
+    expect(deleteFamilyIfEmpty).toHaveBeenCalledWith('solo');
+    expect(leaveFamily).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
     expect(loadEmptySoloGroups).toHaveBeenCalledWith('j');
   });
 
@@ -170,9 +173,18 @@ describe('empty solo group cleanup', () => {
     expect(leaveFamily).not.toHaveBeenCalled();
   });
 
+  it('keeps the group and says why when it is no longer empty (B9)', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
+    (deleteFamilyIfEmpty as jest.Mock).mockResolvedValue(false);
+    await submit();
+    await fireEvent.press(await screen.findByText('삭제'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(toast.error).toHaveBeenCalledWith('그룹에 새 항목이 있어 삭제하지 않았어요');
+  });
+
   it('tells the user when removing the empty group fails, and still finishes', async () => {
     (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
-    (leaveFamily as jest.Mock).mockRejectedValue(new Error('offline'));
+    (deleteFamilyIfEmpty as jest.Mock).mockRejectedValue(new Error('offline'));
     await submit();
     await fireEvent.press(await screen.findByText('삭제'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
@@ -197,13 +209,13 @@ describe('empty solo group cleanup', () => {
       { id: 'a', name: '하나' },
       { id: 'b', name: '둘' },
     ]);
-    (leaveFamily as jest.Mock).mockResolvedValue(undefined);
+    (deleteFamilyIfEmpty as jest.Mock).mockResolvedValue(true);
     await submit();
     await fireEvent.press(await screen.findByText('삭제'));
     expect(await screen.findByText("비어 있는 '둘' 그룹을 삭제할까요?")).toBeTruthy();
     await fireEvent.press(screen.getByText('유지'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
-    expect(leaveFamily).toHaveBeenCalledTimes(1);
-    expect(leaveFamily).toHaveBeenCalledWith('a');
+    expect(deleteFamilyIfEmpty).toHaveBeenCalledTimes(1);
+    expect(deleteFamilyIfEmpty).toHaveBeenCalledWith('a');
   });
 });

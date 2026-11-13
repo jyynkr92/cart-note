@@ -15,7 +15,12 @@ import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { useCurrentGroupStore } from '@/src/groups/current-group-store';
 import { loadEmptySoloGroups } from '@/src/groups/empty-group-cleanup';
-import { GroupError, joinFamily, leaveFamily, type GroupErrorCode } from '@/src/groups/group-api';
+import {
+  deleteFamilyIfEmpty,
+  GroupError,
+  joinFamily,
+  type GroupErrorCode,
+} from '@/src/groups/group-api';
 import { mk, qk } from '@/src/lib/query-keys';
 import { INVITE_CODE_LENGTH, normalizeInviteCode } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
@@ -78,7 +83,10 @@ export default function Join() {
     setBusy(true);
     try {
       try {
-        if (remove) await leaveFamily(current.id);
+        // 묻는 사이 다른 멤버가 들어오거나 항목이 생겼으면 서버가 지우지 않는다(false).
+        if (remove && !(await deleteFamilyIfEmpty(current.id))) {
+          toast.error('그룹에 새 항목이 있어 삭제하지 않았어요');
+        }
       } catch {
         // 정리는 부가 기능이라 실패해도 알리고 계속 진행한다.
         toast.error('그룹을 삭제하지 못했어요');

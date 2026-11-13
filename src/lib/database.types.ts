@@ -171,6 +171,9 @@ isOneToOne: false
 "create_family":
 { Args: { "p_name": string }; Returns: string
                            },
+"delete_family_if_empty":
+{ Args: { "p_family_id": string }; Returns: boolean
+                           },
 "family_item_count":
 { Args: { "p_family_id": string }; Returns: number
                            },

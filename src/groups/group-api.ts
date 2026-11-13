@@ -104,6 +104,14 @@ export async function fetchFamilyMembers(id: string): Promise<FamilyMember[]> {
   return members.map((m) => ({ ...m, display_name: names.get(m.user_id) ?? null }));
 }
 
+/**
+ * 잠근 상태에서 다시 빈 그룹인지 확인한 뒤 지운다(확인과 삭제 사이의 참여/항목 추가 경합 방지).
+ * 지웠으면 true, 그 사이 비어 있지 않게 됐으면 false.
+ */
+export async function deleteFamilyIfEmpty(id: string): Promise<boolean> {
+  return required(await rpcData(supabase.rpc('delete_family_if_empty', { p_family_id: id })));
+}
+
 /** 멤버가 나 혼자이고 항목·추가 목록·지점이 하나도 없으면 true(참여 후 정리 후보). */
 export async function familyIsEmpty(id: string): Promise<boolean> {
   return required(await rpcData(supabase.rpc('family_is_empty', { p_family_id: id })));

@@ -76,6 +76,14 @@ describe('other wrappers', () => {
     expect(rpc).toHaveBeenCalledWith('family_is_empty', { p_family_id: 'f1' });
   });
 
+  it('deleteFamilyIfEmpty calls the atomic RPC and returns whether it deleted (B9)', async () => {
+    rpc.mockResolvedValue({ data: false, error: null });
+    await expect(api.deleteFamilyIfEmpty('f1')).resolves.toBe(false);
+    expect(rpc).toHaveBeenCalledWith('delete_family_if_empty', { p_family_id: 'f1' });
+    rpc.mockResolvedValue({ data: null, error: { message: 'not_member' } });
+    expect(await codeOf(api.deleteFamilyIfEmpty('f1'))).toBe('not_member');
+  });
+
   it('renameFamily updates only the name', async () => {
     const [calls] = mockQuery({ data: null, error: null });
     await api.renameFamily('f1', '새 이름');
