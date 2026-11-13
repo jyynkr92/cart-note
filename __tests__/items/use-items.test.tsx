@@ -23,6 +23,8 @@ jest.mock('@/src/items/item-api', () => ({
   insertItem: jest.fn(),
   updateItem: jest.fn(),
   deleteItems: jest.fn(),
+  clearDoneItems: jest.fn(),
+  clearListItems: jest.fn(),
   moveItems: jest.fn(),
 }));
 
@@ -177,7 +179,7 @@ it('clears only done items from the cache', async () => {
     listId: 'l1',
     ids: ['done'],
   });
-  expect(mocked.deleteItems).toHaveBeenCalledWith(['done']);
+  expect(mocked.clearDoneItems).toHaveBeenCalledWith('l1', ['done']);
 });
 
 it('clears the whole list from the cache', async () => {
@@ -191,7 +193,7 @@ it('clears the whole list from the cache', async () => {
     listId: 'l1',
     ids: ['a', 'b'],
   });
-  expect(mocked.deleteItems).toHaveBeenCalledWith(['a', 'b']);
+  expect(mocked.clearListItems).toHaveBeenCalledWith('l1', ['a', 'b']);
 });
 
 it('does not run a clear when nothing in the cache matches', async () => {
@@ -200,7 +202,7 @@ it('does not run a clear when nothing in the cache matches', async () => {
   await act(async () => {
     result.current.mutate({ listId: 'l1' });
   });
-  expect(mocked.deleteItems).not.toHaveBeenCalled();
+  expect(mocked.clearDoneItems).not.toHaveBeenCalled();
   expect(client.getMutationCache().getAll()).toHaveLength(0);
 });
 

@@ -7,6 +7,8 @@ import ListDetail from '@/app/(app)/list/[id]/index';
 import { fetchMyFamilies, fetchFamilyMembers, type Family } from '@/src/groups/group-api';
 import { resetCurrentGroupStore } from '@/src/groups/current-group-store';
 import {
+  clearDoneItems,
+  clearListItems,
   deleteItems,
   fetchItems,
   insertItem,
@@ -57,6 +59,8 @@ jest.mock('@/src/items/item-api', () => ({
   insertItem: jest.fn(),
   updateItem: jest.fn(),
   deleteItems: jest.fn(),
+  clearDoneItems: jest.fn(),
+  clearListItems: jest.fn(),
   moveItems: jest.fn(),
 }));
 
@@ -214,7 +218,7 @@ describe('menu', () => {
     await screen.findByText('빵');
     await openMenu();
     await fireEvent.press(await screen.findByText('완료 항목 지우기'));
-    await waitFor(() => expect(deleteItems).toHaveBeenCalledWith(['i2']));
+    await waitFor(() => expect(clearDoneItems).toHaveBeenCalledWith('l1', ['i2']));
   });
 
   it('disables "완료 항목 지우기" when nothing is finished', async () => {
@@ -232,9 +236,9 @@ describe('menu', () => {
     await openMenu();
     await fireEvent.press(await screen.findByText('목록 비우기'));
     expect(await screen.findByText('목록의 모든 항목을 삭제할까요?')).toBeTruthy();
-    expect(deleteItems).not.toHaveBeenCalled();
+    expect(clearListItems).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByText('비우기'));
-    await waitFor(() => expect(deleteItems).toHaveBeenCalledWith(['i1']));
+    await waitFor(() => expect(clearListItems).toHaveBeenCalledWith('l1', ['i1']));
   });
 
   it('does not empty the list when cancelled', async () => {
@@ -245,7 +249,7 @@ describe('menu', () => {
     await fireEvent.press(await screen.findByText('목록 비우기'));
     await fireEvent.press(await screen.findByText('취소'));
     await waitFor(() => expect(screen.queryByText('목록의 모든 항목을 삭제할까요?')).toBeNull());
-    expect(deleteItems).not.toHaveBeenCalled();
+    expect(clearListItems).not.toHaveBeenCalled();
   });
 
   it('hides list deletion and location management for the inbox', async () => {

@@ -146,7 +146,7 @@ export function registerItemMutations(qc: QueryClient) {
   define<ClearVars>(qc, {
     key: mk.clearDone,
     // ids가 없는(이전 버전에서 영속화된) 변수는 무엇을 지울지 알 수 없으므로 아무것도 지우지 않는다.
-    run: (v) => api.deleteItems(v.ids ?? []),
+    run: (v) => api.clearDoneItems(v.listId, v.ids ?? []),
     lists: (_qc, v) => [v.listId],
     apply: (qc, v) => patchList(qc, v.listId, (old) => old.filter((i) => !i.is_done)),
     error: '완료 항목을 지우지 못했어요',
@@ -154,7 +154,7 @@ export function registerItemMutations(qc: QueryClient) {
 
   define<ClearVars>(qc, {
     key: mk.clearList,
-    run: (v) => api.deleteItems(v.ids ?? []),
+    run: (v) => api.clearListItems(v.listId, v.ids ?? []),
     lists: (_qc, v) => [v.listId],
     apply: (qc, v) => patchList(qc, v.listId, () => []),
     error: '목록을 비우지 못했어요',

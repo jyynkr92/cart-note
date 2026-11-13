@@ -1,4 +1,12 @@
-import { deleteItems, fetchItems, insertItem, moveItems, updateItem } from '@/src/items/item-api';
+import {
+  clearDoneItems,
+  clearListItems,
+  deleteItems,
+  fetchItems,
+  insertItem,
+  moveItems,
+  updateItem,
+} from '@/src/items/item-api';
 import { supabase } from '@/src/lib/supabase';
 import { chain } from '@/test-utils/supabase-chain';
 
@@ -106,5 +114,82 @@ describe('moveItems', () => {
   it('is a no-op for an empty id list', async () => {
     await moveItems('l2', []);
     expect(from).not.toHaveBeenCalled();
+  });
+});
+
+// B2: 재실행 때 id만으로 지우면, 그 사이 다른 목록으로 옮겨졌거나 다시 미완료가 된 항목까지 지운다.
+describe('clear guards (B2)', () => {
+  it('clearDoneItems deletes only the ids that are still done in that list', async () => {
+    const calls = mockQuery({ error: null });
+    await clearDoneItems('l1', ['a', 'b']);
+    expect(from).toHaveBeenCalledWith('items');
+    expect(calls).toEqual([
+      ['delete', []],
+      ['in', ['id', ['a', 'b']]],
+      ['eq', ['list_id', 'l1']],
+      ['eq', ['is_done', true]],
+    ]);
+  });
+
+  it('clearListItems deletes only the ids still in that list', async () => {
+    const calls = mockQuery({ error: null });
+    await clearListItems('l1', ['a']);
+    expect(calls).toEqual([
+      ['delete', []],
+      ['in', ['id', ['a']]],
+      ['eq', ['list_id', 'l1']],
+    ]);
+  });
+
+  it('are no-ops for empty ids and rethrow errors', async () => {
+    await clearDoneItems('l1', []);
+    await clearListItems('l1', []);
+    expect(from).not.toHaveBeenCalled();
+    mockQuery({ error: { code: '42501' } });
+    await expect(clearListItems('l1', ['a'])).rejects.toEqual({ code: '42501' });
+  });
+});
+
+// B3: 긴 id 목록은 URL 길이 제한에 걸리므로 100개씩 순서대로 보낸다.
+describe('batching (B3)', () => {
+  const ids = Array.from({ length: 250 }, (_, i) => `id${i}`);
+
+  function recordBatches() {
+    const batches: unknown[][] = [];
+    from.mockImplementation(() => {
+      const c = chain({ error: null });
+      const calls = c.calls;
+      queueMicrotask(() => {
+        const inCall = calls.find(([m]) => m === 'in');
+        if (inCall) batches.push(inCall[1][1] as unknown[]);
+      });
+      return c.builder;
+    });
+    return batches;
+  }
+
+  it.each([
+    ['deleteItems', () => deleteItems(ids)],
+    ['moveItems', () => moveItems('l2', ids)],
+    ['clearDoneItems', () => clearDoneItems('l1', ids)],
+    ['clearListItems', () => clearListItems('l1', ids)],
+  ])('%s sends ids in batches of 100', async (_name, run) => {
+    const batches = recordBatches();
+    await run();
+    expect(batches.map((b) => b.length)).toEqual([100, 100, 50]);
+    expect(batches.flat()).toEqual(ids);
+  });
+
+  it('sends batches one after another and stops at the first error', async () => {
+    let release!: (v: unknown) => void;
+    const first = chain(new Promise((r) => (release = r)));
+    const second = chain({ error: { code: '42501' } });
+    from.mockReturnValueOnce(first.builder).mockReturnValueOnce(second.builder);
+    const p = deleteItems(ids);
+    await Promise.resolve();
+    expect(from).toHaveBeenCalledTimes(1);
+    release({ error: null });
+    await expect(p).rejects.toEqual({ code: '42501' });
+    expect(from).toHaveBeenCalledTimes(2);
   });
 });

@@ -39,12 +39,38 @@ export async function updateItem(id: string, patch: ItemPatch): Promise<void> {
   check(await supabase.from('items').update(patch).eq('id', id));
 }
 
+/** `.in('id', …)`은 URL 쿼리로 가므로 길이 제한을 넘지 않게 100개씩 나눠 순서대로 보낸다. 첫 오류에서 멈춘다. */
+export const ID_BATCH_SIZE = 100;
+
+async function inBatches(ids: string[], run: (batch: string[]) => PromiseLike<{ error: unknown }>) {
+  for (let i = 0; i < ids.length; i += ID_BATCH_SIZE) {
+    check(await run(ids.slice(i, i + ID_BATCH_SIZE)));
+  }
+}
+
 export async function deleteItems(ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
-  check(await supabase.from('items').delete().in('id', ids));
+  await inBatches(ids, (batch) => supabase.from('items').delete().in('id', batch));
+}
+
+/**
+ * 완료 항목 지우기 재실행: 누를 때 보이던 id 중 아직 그 목록에 있고 완료 상태인 것만 지운다
+ * (그 사이 다른 목록으로 옮겨졌거나 다시 미완료가 된 항목은 남긴다).
+ */
+export async function clearDoneItems(listId: string, ids: string[]): Promise<void> {
+  await inBatches(ids, (batch) =>
+    supabase.from('items').delete().in('id', batch).eq('list_id', listId).eq('is_done', true)
+  );
+}
+
+/** 목록 비우기 재실행: 누를 때 보이던 id 중 아직 그 목록에 있는 것만 지운다. */
+export async function clearListItems(listId: string, ids: string[]): Promise<void> {
+  await inBatches(ids, (batch) =>
+    supabase.from('items').delete().in('id', batch).eq('list_id', listId)
+  );
 }
 
 export async function moveItems(toListId: string, ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
-  check(await supabase.from('items').update({ list_id: toListId }).in('id', ids));
+  await inBatches(ids, (batch) =>
+    supabase.from('items').update({ list_id: toListId }).in('id', batch)
+  );
 }
