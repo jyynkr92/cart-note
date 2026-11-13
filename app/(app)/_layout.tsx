@@ -12,9 +12,12 @@ import { useOnboarding } from '@/src/onboarding/use-onboarding';
 import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';
 
 export default function AppLayout() {
-  const { session, loading } = useAuth();
+  const { session, loading, offlineUserId } = useAuth();
+  // 저장된 세션만 있고(오프라인 갱신 실패) 실제 세션이 없으면 서버에 묻지 않고 캐시로 판단한다.
+  const sessionPending = !session && !!offlineUserId;
   const { step, pendingInvite, error, offline, retry } = useOnboarding(
-    loading ? null : (session?.user.id ?? null)
+    loading ? null : (session?.user.id ?? offlineUserId),
+    { sessionPending }
   );
   const family = useCurrentFamily();
   useFamilyRealtime(step === 'ready' ? (family?.id ?? null) : null);
@@ -23,7 +26,7 @@ export default function AppLayout() {
   useOpenPendingNotification(step === 'ready', families);
 
   if (loading) return <Loading />;
-  if (!session) return <Redirect href="/login" />;
+  if (!session && !offlineUserId) return <Redirect href="/login" />;
 
   if (error) {
     return (

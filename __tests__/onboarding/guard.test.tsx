@@ -24,9 +24,12 @@ jest.mock('expo-router', () => {
     },
   };
 });
-jest.mock('@/src/auth/AuthProvider', () => ({
-  useAuth: () => ({ session: { user: { id: 'u1' } }, loading: false }),
-}));
+let mockAuth: { session: unknown; loading: boolean; offlineUserId: string | null } = {
+  session: { user: { id: 'u1' } },
+  loading: false,
+  offlineUserId: null,
+};
+jest.mock('@/src/auth/AuthProvider', () => ({ useAuth: () => mockAuth }));
 jest.mock('@/src/groups/group-api', () => ({
   createFamily: jest.fn(),
   fetchMyFamilies: jest.fn(),
@@ -51,6 +54,7 @@ beforeEach(async () => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   jest.clearAllMocks();
   mockStackMounts = 0;
+  mockAuth = { session: { user: { id: 'u1' } }, loading: false, offlineUserId: null };
   await AsyncStorage.clear();
   (createFamily as jest.Mock).mockResolvedValue('f1');
 });
@@ -232,5 +236,31 @@ describe('offline cold start (R1)', () => {
     await renderWithClient(<AppLayout />);
     expect(await screen.findByText('READY')).toBeTruthy();
     await waitFor(async () => expect(await isOnboarded('u1')).toBe(true));
+  });
+});
+
+// B1: 저장된 세션은 있는데 갱신 실패로 session이 null인 경우(오프라인). 로그인 화면으로 보내거나 서버에 묻지 않는다.
+describe('stored session while the live session is null (B1)', () => {
+  const family = { id: 'f1', name: '내 장보기', created_at: '2026-01-01T00:00:00Z' };
+  beforeEach(() => {
+    mockAuth = { session: null, loading: false, offlineUserId: 'u1' };
+  });
+
+  it('shows the cached home for the stored user without asking the server', async () => {
+    set(true, null, 1);
+    client.setQueryData(qk.families(), [family]);
+    await markOnboarded('u1');
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('READY')).toBeTruthy();
+    expect(hasProfile).not.toHaveBeenCalled();
+    expect(screen.queryByText('redirect:"/login"')).toBeNull();
+  });
+
+  it('shows the offline screen instead of the login redirect without cached state', async () => {
+    set(true, null, 1);
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('오프라인이라 확인할 수 없어요')).toBeTruthy();
+    expect(screen.queryByText('redirect:"/login"')).toBeNull();
+    expect(hasProfile).not.toHaveBeenCalled();
   });
 });

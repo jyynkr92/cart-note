@@ -1,8 +1,7 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
-import { AUTH_STORAGE_KEY } from '@/src/lib/supabase';
+import { hasStoredSession } from '@/src/auth/stored-session';
 import { fetchOpenCount } from './geofence-api';
 import { setRegionFingerprint } from './geofence-store';
 import { handleEnter } from './handle-enter';
@@ -13,20 +12,11 @@ export const GEOFENCE_TASK = 'cart-note-geofence';
 type GeofenceEvent = { eventType: Location.GeofencingEventType; region: Location.LocationRegion };
 
 /**
- * 로그인 여부를 저장된 세션으로 판단한다. getSession()은 만료된 access token을 갱신하려다
+ * 로그인 여부를 저장된 세션으로 판단한다(hasStoredSession). getSession()은 만료된 access token을 갱신하려다
  * 오프라인이면 null을 주므로(캐시 개수로 알려야 하는 바로 그 상황) 쓰지 않는다.
  * 로그아웃은 이 키를 지우고 regionMeta도 비우므로 로그아웃 사용자는 여전히 알림을 받지 않는다.
  */
-async function hasSession(): Promise<boolean> {
-  const raw = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-  if (!raw) return false;
-  try {
-    const stored = JSON.parse(raw) as { refresh_token?: unknown } | null;
-    return typeof stored?.refresh_token === 'string' && stored.refresh_token.length > 0;
-  } catch {
-    return false;
-  }
-}
+const hasSession = hasStoredSession;
 
 async function notify(title: string, data: { listId: string; familyId: string }): Promise<void> {
   await Notifications.scheduleNotificationAsync({

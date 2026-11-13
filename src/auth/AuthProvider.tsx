@@ -15,6 +15,7 @@ import { supabase } from '@/src/lib/supabase';
 import { capturePendingInvite } from '@/src/onboarding/pending-invite';
 import { exchangeCodeFromUrl } from './auth-api';
 import { clearSignedOutDeviceState } from './signed-out-state';
+import { readStoredSession } from './stored-session';
 
 export const LINK_ERROR_MESSAGE =
   '로그인 링크가 만료되었거나 올바르지 않아요. 코드로 로그인해 주세요';
@@ -22,6 +23,11 @@ export const LINK_ERROR_MESSAGE =
 type AuthState = {
   session: Session | null;
   loading: boolean;
+  /**
+   * session은 없지만 저장된 세션(refresh token)이 있는 사용자 id. 오프라인 콜드 스타트에서 만료된 access token을
+   * 갱신하지 못하면 auth-js가 null 세션을 보내도 로그아웃이 아니다 — 캐시로 홈을 보여 주고 로그인으로 보내지 않는다.
+   */
+  offlineUserId: string | null;
   linkError: string | null;
   clearLinkError: () => void;
 };
@@ -29,6 +35,7 @@ type AuthState = {
 const AuthContext = createContext<AuthState>({
   session: null,
   loading: true,
+  offlineUserId: null,
   linkError: null,
   clearLinkError: () => {},
 });
@@ -36,19 +43,34 @@ const AuthContext = createContext<AuthState>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [offlineUserId, setOfflineUserId] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const clearLinkError = useCallback(() => setLinkError(null), []);
 
   useEffect(() => {
+    // 늦게 끝난 저장소 읽기가 더 최근 이벤트를 덮어쓰지 않게 한다.
+    let seq = 0;
     const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      const mine = ++seq;
       // 같은 기기의 다른 사용자가 이전 캐시(오프라인 큐 포함)를 보지 못하게 로그아웃 시 즉시 비운다.
       if (event === 'SIGNED_OUT') {
         void clearUserCache().catch(() => {});
         // 현재 그룹, 지오펜스(이전 사용자의 지점/메타로 계속 돌지 않게), 온보딩 표시를 지운다.
         void clearSignedOutDeviceState();
       }
-      setSession(next);
-      setLoading(false);
+      if (next || event === 'SIGNED_OUT') {
+        setSession(next);
+        setOfflineUserId(null);
+        setLoading(false);
+        return;
+      }
+      // 세션 없음(SIGNED_OUT 아님): 저장된 refresh token이 있으면 오프라인 갱신 실패로 본다.
+      void readStoredSession().then((stored) => {
+        if (mine !== seq) return;
+        setSession(null);
+        setOfflineUserId(stored?.userId ?? null);
+        setLoading(false);
+      });
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -92,8 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ session, loading, linkError, clearLinkError }),
-    [session, loading, linkError, clearLinkError]
+    () => ({ session, loading, offlineUserId, linkError, clearLinkError }),
+    [session, loading, offlineUserId, linkError, clearLinkError]
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

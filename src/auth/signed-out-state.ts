@@ -3,6 +3,7 @@ import { resetGeofencing } from '@/src/geofence/sync-geofences';
 import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { syncCacheOwner } from '@/src/lib/query-client';
 import { clearOnboarded } from '@/src/onboarding/onboarded-flag';
+import { hasStoredSession } from './stored-session';
 
 /**
  * 로그아웃 상태에서 남아 있으면 안 되는 기기 로컬 사용자별 상태(현재 그룹, 지오펜스 등록/메타, 온보딩 표시)를 지운다.
@@ -22,6 +23,9 @@ export async function clearSignedOutDeviceState(): Promise<void> {
  * (예: 앱이 꺼진 사이 만료)일 수 있으므로 기기 로컬 사용자별 상태도 지운다. 절대 던지지 않는다.
  */
 export async function reconcileCacheOwner(client: QueryClient, userId: string | null): Promise<void> {
+  // 세션은 없지만 refresh token이 저장돼 있으면 오프라인 갱신 실패다(로그아웃 아님): 캐시/큐/기기 상태를 그대로 두고,
+  // 소유자를 확정할 수 없으니 큐도 재개하지 않는다. 세션이 돌아오면(userId) 다시 불려 재개한다.
+  if (userId === null && (await hasStoredSession())) return;
   try {
     await syncCacheOwner(client, userId);
   } catch {

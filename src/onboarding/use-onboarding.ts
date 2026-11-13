@@ -63,12 +63,16 @@ async function resolveForUser(userId: string, qc: QueryClient): Promise<Resolved
  * 가드용 상태 조회. 사용자별 query key라서 계정이 바뀌면 상태가 섞이지 않고,
  * 프로필 저장/그룹 참여 후 `qk.onboarding(userId)`를 무효화하면 리마운트 없이 다음 단계로 넘어간다.
  */
-export function useOnboarding(userId: string | null): State {
+export function useOnboarding(
+  userId: string | null,
+  { sessionPending = false }: { sessionPending?: boolean } = {}
+): State {
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: qk.onboarding(userId ?? ''),
     queryFn: () => resolveForUser(userId!, qc),
-    enabled: !!userId,
+    // 세션이 아직 없으면(저장된 세션만 있음) 익명 요청으로 잘못된 단계(프로필 없음 등)를 받지 않도록 묻지 않는다.
+    enabled: !!userId && !sessionPending,
     retry: false,
     staleTime: 0,
   });
@@ -93,6 +97,7 @@ export function useOnboarding(userId: string | null): State {
 
   if (!q.data) {
     const unreachable =
+      sessionPending ||
       q.fetchStatus === 'paused' ||
       (q.isError && q.fetchStatus === 'idle' && isNetworkError(q.error)) ||
       (usedCache.current === userId && q.fetchStatus === 'fetching');
@@ -116,7 +121,7 @@ export function useOnboarding(userId: string | null): State {
     step: q.data?.step ?? null,
     pendingInvite: q.data?.pendingInvite ?? null,
     error: false,
-    offline: !q.data && q.fetchStatus === 'paused',
+    offline: !q.data && (q.fetchStatus === 'paused' || sessionPending),
     retry,
   };
 }
