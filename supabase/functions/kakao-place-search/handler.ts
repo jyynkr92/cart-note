@@ -50,6 +50,16 @@ function toPlace(doc: KakaoDoc): Place | null {
   };
 }
 
+/**
+ * 응답 상태 코드:
+ * - 200 `{ places }`
+ * - 400 query 누락/본문 오류, 401 인증 실패, 405 POST 외 메서드
+ * - 429 `{ error: 'rate_limited' }` 사용자별 할당량(시간당 60회) 초과
+ * - 500 `{ error: 'search unavailable' }` 서버에 KAKAO_REST_KEY가 없음(설정 오류)
+ * - 503 `{ error: 'search unavailable' }` 할당량 RPC(consume_search_quota) 실패. 확인하지 못하면 카카오를
+ *   호출하지 않는다(fail closed). 일시적 장애이므로 클라이언트는 나중에 다시 시도하면 된다.
+ * - 502 `{ error: 'search failed' }` 카카오 호출 실패/비정상 응답
+ */
 export async function handlePlaceSearch(req: Request, deps: Deps): Promise<Response> {
   if (req.method !== 'POST') return json(405, { error: 'method not allowed' }, { Allow: 'POST' });
 

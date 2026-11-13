@@ -54,6 +54,17 @@ KAKAO_REST_KEY=<카카오 REST API 키>
 - 로컬 실행: `npx supabase functions serve` (위 파일을 읽는다)
 - 배포: `npx supabase secrets set KAKAO_REST_KEY=<키>`
 
+`kakao-place-search` 응답 상태 코드:
+
+| 상태 | 본문 | 의미 |
+| --- | --- | --- |
+| 200 | `{ places }` | 검색 결과 |
+| 400 / 401 / 405 | `{ error }` | 잘못된 요청 / 인증 실패 / POST 외 메서드 |
+| 429 | `{ error: 'rate_limited' }` | 사용자별 할당량(시간당 60회) 초과 |
+| 500 | `{ error: 'search unavailable' }` | `KAKAO_REST_KEY` 미설정 |
+| 503 | `{ error: 'search unavailable' }` | 할당량 RPC(`consume_search_quota`) 실패. 확인하지 못하면 카카오를 부르지 않는다(fail closed). 일시적 장애라 다시 시도하면 된다 |
+| 502 | `{ error: 'search failed' }` | 카카오 호출 실패 |
+
 ## 개발 빌드
 
 지오펜싱, 백그라운드 위치, 알림은 Expo Go에서 동작하지 않는다. `expo-dev-client`가 설치되어 있으므로 개발 빌드를 쓴다.

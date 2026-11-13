@@ -172,10 +172,11 @@ describe('per-user quota', () => {
     expect(d.fetch).not.toHaveBeenCalled();
   });
 
-  it('fails closed when the quota check errors', async () => {
+  it('fails closed with 503 search unavailable when the quota RPC fails', async () => {
     const d = deps({ consumeQuota: jest.fn(async () => Promise.reject(new Error('db down'))) });
     const res = await handlePlaceSearch(post({ query: '코스트코' }), d);
-    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'search unavailable' });
     expect(d.fetch).not.toHaveBeenCalled();
   });
 
