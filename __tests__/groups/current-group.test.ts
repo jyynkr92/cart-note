@@ -12,7 +12,8 @@ import {
 const fam = (id: string, created_at: string): Family => ({
   id,
   name: id,
-  invite_code: '000000',
+  invite_code: '00000000',
+  invite_code_expires_at: '2099-01-01T00:00:00Z',
   created_at,
   created_by: 'u1',
 });

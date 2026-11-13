@@ -52,15 +52,24 @@ jest.mock('@/src/groups/group-api', () => ({
   createFamily: jest.fn(),
 }));
 
-const fam = (id: string, name: string, created_at: string, invite_code = '012345'): Family => ({
+// 기기 시간대와 무관하게 "3월 5일"로 보이도록 로컬 시각으로 만든다.
+const FUTURE = new Date(2099, 2, 5, 12).toISOString();
+const fam = (
+  id: string,
+  name: string,
+  created_at: string,
+  invite_code = '01234567',
+  invite_code_expires_at = FUTURE,
+): Family => ({
   id,
   name,
   invite_code,
+  invite_code_expires_at,
   created_at,
   created_by: 'u1',
 });
 const G1 = fam('g1', '우리집', '2026-01-01T00:00:00Z');
-const G2 = fam('g2', '회사', '2026-02-01T00:00:00Z', '999888');
+const G2 = fam('g2', '회사', '2026-02-01T00:00:00Z', '99988877');
 
 const families = fetchMyFamilies as jest.Mock;
 const members = fetchFamilyMembers as jest.Mock;
@@ -94,7 +103,7 @@ afterEach(async () => {
 
 async function ready() {
   await renderSettings();
-  await screen.findByText('012345');
+  await screen.findByText('01234567');
   await screen.findByText('은정');
 }
 
@@ -107,7 +116,7 @@ it('shows the invite code and member names, with a fallback for no name', async 
 it('copies the invite code and confirms it', async () => {
   await ready();
   await fireEvent.press(screen.getByText('복사'));
-  expect(Clipboard.setStringAsync).toHaveBeenCalledWith('012345');
+  expect(Clipboard.setStringAsync).toHaveBeenCalledWith('01234567');
   await waitFor(() => expect(toast.info).toHaveBeenCalledWith('복사했어요'));
 });
 
@@ -144,7 +153,7 @@ it('regenerates only once on a double tap', async () => {
   const confirm = await screen.findByText('재발급');
   await fireEvent.press(confirm);
   await fireEvent.press(confirm);
-  await act(async () => finish('555555'));
+  await act(async () => finish('55555555'));
   expect(regenerateInviteCode).toHaveBeenCalledTimes(1);
 });
 
@@ -153,20 +162,60 @@ it('shares a message with the code and the deep link', async () => {
   await ready();
   await fireEvent.press(screen.getByText('가족 초대하기'));
   const { message } = share.mock.calls[0][0] as { message: string };
-  expect(message).toContain('012345');
-  expect(message).toContain('cartnote://join?code=012345');
+  expect(message).toContain('01234567');
+  expect(message).toContain('cartnote://join?code=01234567');
   share.mockRestore();
 });
 
 it('regenerates the code only after confirming', async () => {
-  (regenerateInviteCode as jest.Mock).mockResolvedValue('555555');
+  (regenerateInviteCode as jest.Mock).mockResolvedValue('55555555');
   await ready();
   await fireEvent.press(screen.getByText('코드 재발급'));
   expect(regenerateInviteCode).not.toHaveBeenCalled();
-  families.mockResolvedValue([{ ...G1, invite_code: '555555' }, G2]);
+  families.mockResolvedValue([{ ...G1, invite_code: '55555555' }, G2]);
   await fireEvent.press(await screen.findByText('재발급'));
   await waitFor(() => expect(regenerateInviteCode).toHaveBeenCalledWith('g1'));
-  expect(await screen.findByText('555555')).toBeTruthy();
+  expect(await screen.findByText('55555555')).toBeTruthy();
+});
+
+it('shows until when the invite code is valid', async () => {
+  await ready();
+  expect(screen.getByText('3월 5일까지 유효')).toBeTruthy();
+  expect(screen.queryByText(/만료/)).toBeNull();
+});
+
+describe('expired invite code', () => {
+  beforeEach(() => {
+    families.mockResolvedValue([{ ...G1, invite_code_expires_at: '2020-01-01T00:00:00Z' }, G2]);
+  });
+
+  it('says it expired and does not regenerate on its own', async () => {
+    await ready();
+    expect(screen.getByText('만료된 코드예요. 새 코드를 발급해 주세요')).toBeTruthy();
+    expect(screen.queryByText(/까지 유효/)).toBeNull();
+    expect(regenerateInviteCode).not.toHaveBeenCalled();
+  });
+
+  it('disables copy and share so an expired code is not sent', async () => {
+    const share = jest.spyOn(Share, 'share');
+    await ready();
+    expect(screen.getByRole('button', { name: '복사' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '가족 초대하기' })).toBeDisabled();
+    await fireEvent.press(screen.getByText('가족 초대하기'));
+    expect(share).not.toHaveBeenCalled();
+    share.mockRestore();
+  });
+
+  it('offers a prominent regenerate that still asks first', async () => {
+    (regenerateInviteCode as jest.Mock).mockResolvedValue('55555555');
+    await ready();
+    await fireEvent.press(screen.getByRole('button', { name: '새 코드 발급' }));
+    expect(regenerateInviteCode).not.toHaveBeenCalled();
+    families.mockResolvedValue([{ ...G1, invite_code: '55555555' }, G2]);
+    await fireEvent.press(await screen.findByText('재발급'));
+    await waitFor(() => expect(regenerateInviteCode).toHaveBeenCalledWith('g1'));
+    expect(await screen.findByText('3월 5일까지 유효')).toBeTruthy();
+  });
 });
 
 it('does not regenerate when cancelled', async () => {
@@ -211,7 +260,7 @@ describe('leaving the group', () => {
     families.mockResolvedValue([G2]);
     await fireEvent.press(await screen.findByText('나가기'));
     await act(async () => finish());
-    expect(screen.queryByText('012345')).toBeNull();
+    expect(screen.queryByText('01234567')).toBeNull();
     expect(screen.queryByText('999888')).toBeNull();
     await waitFor(() => expect(mockReplace).toHaveBeenCalled());
     expect(screen.queryByText('999888')).toBeNull();
@@ -226,7 +275,7 @@ describe('leaving the group', () => {
     await fireEvent.press(await screen.findByText('나가기'));
     await waitFor(() => expect(leaveFamily).toHaveBeenCalledWith('g1'));
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
-    expect(screen.queryByText('012345')).toBeNull();
+    expect(screen.queryByText('01234567')).toBeNull();
     expect(screen.queryByText('그룹 정보를 불러올 수 없어요')).toBeNull();
   });
 });

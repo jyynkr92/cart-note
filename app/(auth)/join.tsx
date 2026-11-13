@@ -17,7 +17,7 @@ import { useCurrentGroupStore } from '@/src/groups/current-group-store';
 import { loadEmptySoloGroups } from '@/src/groups/empty-group-cleanup';
 import { GroupError, joinFamily, leaveFamily, type GroupErrorCode } from '@/src/groups/group-api';
 import { qk } from '@/src/lib/query-keys';
-import { normalizeInviteCode } from '@/src/lib/text';
+import { INVITE_CODE_LENGTH, normalizeInviteCode } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
 
@@ -125,11 +125,11 @@ export default function Join() {
     <View className="flex-1 justify-center gap-4 bg-background px-6">
       <Text className="text-2xl font-bold">초대 코드로 참여하기</Text>
       <Input
-        placeholder="000000"
+        placeholder="00000000"
         value={code}
-        onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+        onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, INVITE_CODE_LENGTH))}
         keyboardType="number-pad"
-        maxLength={6}
+        maxLength={INVITE_CODE_LENGTH}
       />
       <Button onPress={submit} disabled={!normalized || busy}>
         <Text>참여</Text>

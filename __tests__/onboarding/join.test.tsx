@@ -53,9 +53,9 @@ beforeEach(async () => {
   (loadEmptySoloGroups as jest.Mock).mockResolvedValue([]);
 });
 
-async function submit(code = '123456') {
+async function submit(code = '12345678') {
   await renderJoin();
-  await fireEvent.changeText(screen.getByPlaceholderText('000000'), code);
+  await fireEvent.changeText(screen.getByPlaceholderText('00000000'), code);
   await fireEvent.press(screen.getByText('참여'));
 }
 
@@ -77,21 +77,21 @@ it('treats an unknown thrown error as a network error', async () => {
   expect(await screen.findByText('연결을 확인해 주세요')).toBeTruthy();
 });
 
-it('disables the button below 6 digits', async () => {
+it('disables the button below 8 digits', async () => {
   await renderJoin();
-  await fireEvent.changeText(screen.getByPlaceholderText('000000'), '12345');
+  await fireEvent.changeText(screen.getByPlaceholderText('00000000'), '1234567');
   expect(screen.getByRole('button', { name: '참여' })).toBeDisabled();
   await fireEvent.press(screen.getByText('참여'));
   expect(join).not.toHaveBeenCalled();
-  await fireEvent.changeText(screen.getByPlaceholderText('000000'), '123456');
+  await fireEvent.changeText(screen.getByPlaceholderText('00000000'), '12345678');
   expect(screen.getByRole('button', { name: '참여' })).not.toBeDisabled();
 });
 
 it('joins, clears the pending invite and goes home', async () => {
   join.mockResolvedValue('f1');
-  await submit('012345');
+  await submit('01234567');
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
-  expect(join).toHaveBeenCalledWith('012345');
+  expect(join).toHaveBeenCalledWith('01234567');
   expect(clearPendingInvite).toHaveBeenCalled();
 });
 
@@ -115,22 +115,22 @@ it('stays on join when "나중에 할게요" cannot prepare a group', async () =
 });
 
 it('prefills the code from the deep link param', async () => {
-  mockParams = { code: '654321' };
+  mockParams = { code: '87654321' };
   await renderJoin();
-  expect(screen.getByDisplayValue('654321')).toBeTruthy();
+  expect(screen.getByDisplayValue('87654321')).toBeTruthy();
 });
 
 it('prefills from the pending invite', async () => {
-  (getPendingInvite as jest.Mock).mockResolvedValueOnce('111222');
+  (getPendingInvite as jest.Mock).mockResolvedValueOnce('11122233');
   await renderJoin();
-  expect(await screen.findByDisplayValue('111222')).toBeTruthy();
+  expect(await screen.findByDisplayValue('11122233')).toBeTruthy();
 });
 
 it('invalidates onboarding and families after joining', async () => {
   join.mockResolvedValue('f1');
   await renderJoin();
   const spy = jest.spyOn(testClient, 'invalidateQueries');
-  await fireEvent.changeText(screen.getByPlaceholderText('000000'), '123456');
+  await fireEvent.changeText(screen.getByPlaceholderText('00000000'), '12345678');
   await fireEvent.press(screen.getByText('참여'));
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
   const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] }).queryKey);

@@ -26,7 +26,7 @@ select set_config('t.fid', create_family('  내 장보기  ')::text, true);
 select is((select name from families where id = current_setting('t.fid')::uuid), '내 장보기', 'name trimmed');
 select is((select count(*)::int from lists where family_id = current_setting('t.fid')::uuid and kind = 'inbox' and name = '사야할것' and sort_order = 0), 1, 'one inbox created');
 select is((select count(*)::int from family_members where family_id = current_setting('t.fid')::uuid and user_id = '00000000-0000-0000-0000-0000000000a1'), 1, 'caller is member');
-select matches((select invite_code from families where id = current_setting('t.fid')::uuid), '^[0-9]{6}$', 'invite code is 6 digits');
+select matches((select invite_code from families where id = current_setting('t.fid')::uuid), '^[0-9]{8}$', 'invite code is 8 digits');
 select set_config('t.code', (select invite_code from families where id = current_setting('t.fid')::uuid), true);
 
 -- B: 참여
@@ -45,7 +45,7 @@ select is((select family_item_count(current_setting('t.fid')::uuid)), 1, 'item c
 
 -- regenerate 후 이전 코드 무효 (C로 시도)
 select set_config('t.newcode', regenerate_invite_code(current_setting('t.fid')::uuid), true);
-select matches(current_setting('t.newcode'), '^[0-9]{6}$', 'new code is 6 digits');
+select matches(current_setting('t.newcode'), '^[0-9]{8}$', 'new code is 8 digits');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select join_family(current_setting('t.code'))->>'error'), case when current_setting('t.code') = current_setting('t.newcode') then 'x' else 'invalid_code' end, 'old code rejected');
 

@@ -67,7 +67,8 @@ jest.mock('@/src/items/item-api', () => ({
 const G1: Family = {
   id: 'g1',
   name: '우리집',
-  invite_code: '123456',
+  invite_code: '12345678',
+  invite_code_expires_at: '2099-01-01T00:00:00Z',
   created_at: '2026-01-01T00:00:00Z',
   created_by: 'u1',
 };

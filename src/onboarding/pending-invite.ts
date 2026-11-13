@@ -21,7 +21,7 @@ export async function clearPendingInvite(): Promise<void> {
 
 const JOIN_URL_RE = /^cartnote:\/\/join\/?\?([^#]*)/;
 
-/** `cartnote://join?code=XXXXXX` → 검증된 6자리 코드, 아니면 null. */
+/** `cartnote://join?code=XXXXXXXX` → 검증된 8자리 코드, 아니면 null. */
 export function parseJoinUrl(url: string): string | null {
   const m = JOIN_URL_RE.exec(url);
   if (!m) return null;

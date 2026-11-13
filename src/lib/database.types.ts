@@ -25,14 +25,14 @@ export type Database = {
           Tables: {
             "families": {
                   Row: {
-                    "created_at": string,"created_by": string | null,"id": string,"invite_code": string,"name": string
+                    "created_at": string,"created_by": string | null,"id": string,"invite_code": string,"invite_code_expires_at": string,"name": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"invite_code": string,"name": string
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"invite_code": string,"invite_code_expires_at"?: string,"name": string
                   }
                   Update: {
-                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"invite_code"?: string,"name"?: string
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"invite_code"?: string,"invite_code_expires_at"?: string,"name"?: string
                   }
                   Relationships: [
                     

@@ -19,6 +19,7 @@ import { signOut } from '@/src/auth/auth-api';
 import { resolveCurrentFamily, useCurrentGroupStore } from '@/src/groups/current-group-store';
 import { leaveFamily, regenerateInviteCode } from '@/src/groups/group-api';
 import { useGroupNameDialog } from '@/src/groups/GroupNameDialog';
+import { inviteExpiry } from '@/src/groups/invite-expiry';
 import { useCurrentGroup, useFamilyMembers } from '@/src/groups/use-groups';
 import { mk, qk } from '@/src/lib/query-keys';
 import { normalizeName } from '@/src/lib/text';
@@ -67,6 +68,8 @@ export default function Settings() {
   }
 
   const inviteCode = family.invite_code;
+  // 만료되면 자동 재발급하지 않고 눈에 띄는 재발급 버튼으로 안내한다.
+  const expiry = inviteExpiry(family.invite_code_expires_at, Date.now());
   const trimmed = normalizeName(name);
   const myName = members.data?.find((m) => m.user_id === userId)?.display_name ?? '';
 
@@ -198,17 +201,36 @@ export default function Settings() {
       <View className="gap-3">
         <Text className="text-sm text-muted-foreground">{family.name} 초대 코드</Text>
         <Text className="text-3xl font-bold tracking-widest">{inviteCode}</Text>
+        {expiry.expired ? (
+          <Text className="text-destructive">만료된 코드예요. 새 코드를 발급해 주세요</Text>
+        ) : expiry.label ? (
+          <Text className="text-sm text-muted-foreground">{expiry.label}</Text>
+        ) : null}
         <View className="flex-row gap-2">
-          <Button variant="outline" className="flex-1" onPress={() => void copy()}>
+          <Button
+            variant="outline"
+            className="flex-1"
+            onPress={() => void copy()}
+            disabled={expiry.expired}>
             <Text>복사</Text>
           </Button>
-          <Button className="flex-1" onPress={() => void invite()}>
+          <Button
+            variant={expiry.expired ? 'outline' : 'default'}
+            className="flex-1"
+            onPress={() => void invite()}
+            disabled={expiry.expired}>
             <Text>가족 초대하기</Text>
           </Button>
         </View>
-        <Button variant="ghost" onPress={() => setMode('regenerate')}>
-          <Text>코드 재발급</Text>
-        </Button>
+        {expiry.expired ? (
+          <Button onPress={() => setMode('regenerate')}>
+            <Text>새 코드 발급</Text>
+          </Button>
+        ) : (
+          <Button variant="ghost" onPress={() => setMode('regenerate')}>
+            <Text>코드 재발급</Text>
+          </Button>
+        )}
         <Button variant="outline" onPress={() => groupName.open('rename')}>
           <Text>그룹 이름 변경</Text>
         </Button>

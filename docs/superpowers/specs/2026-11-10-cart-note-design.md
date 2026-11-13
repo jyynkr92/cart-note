@@ -34,7 +34,7 @@
 
 ```
 profiles          user_id (PK, → auth.users), display_name, created_at
-families          id, name, invite_code (unique, 6자리 숫자), created_by, created_at
+families          id, name, invite_code (unique, 8자리 숫자, 7일 유효 — 보안 점검(/cso) 반영), invite_code_expires_at, created_by, created_at
 family_members    family_id, user_id, joined_at
                   PK(family_id, user_id)
 lists             id, family_id, name, kind ('inbox' | 'store' | 'online'), sort_order, created_at
@@ -65,9 +65,9 @@ items             id, list_id, family_id, name, note (nullable), is_done, done_a
 | 함수 | 동작 |
 |---|---|
 | `create_family(name)` | 그룹 생성 + 호출자를 멤버로 추가 + inbox 목록 생성 (한 트랜잭션). 초대 코드 생성 |
-| `join_family(code)` | 코드 검증 후 멤버 추가. 잘못된 코드/이미 멤버인 경우 구분된 에러 반환 |
+| `join_family(code)` | 코드 검증 후 멤버 추가. 잘못된 코드/이미 멤버인 경우 구분된 에러 반환. 만료된 코드는 잘못된 코드로 처리하고, 실패는 사용자당 10분 10회·전체 1분 30회로 제한 (보안 점검(/cso) 반영) |
 | `leave_family(id)` | 멤버 제거. 마지막 멤버면 그룹 삭제(하위 데이터 cascade) |
-| `regenerate_invite_code(id)` | 멤버만 호출 가능. 새 코드 발급(기존 코드 무효) |
+| `regenerate_invite_code(id)` | 멤버만 호출 가능. 새 코드 발급(기존 코드 무효, 만료 7일로 재설정) |
 
 ## 4. 인증과 온보딩
 
@@ -87,7 +87,7 @@ items             id, list_id, family_id, name, note (nullable), is_done, done_a
 
 ### 초대
 - 설정 → "가족 초대하기" → 시스템 공유 시트로 메시지 전송:
-  초대 코드 + 스토어 링크 + `cartnote://join?code=XXXXXX`
+  초대 코드 + 스토어 링크 + `cartnote://join?code=XXXXXXXX`
 - 딥링크 진입 시 코드가 미리 채워진 참여 화면을 연다. 로그인 전이면 코드를 로컬에 보관했다가 로그인 직후 처리.
 - 그룹 멤버가 1명뿐이면 홈 하단에 작은 초대 안내를 노출한다.
 
@@ -129,7 +129,7 @@ items             id, list_id, family_id, name, note (nullable), is_done, done_a
 - 등록된 지점 목록, 스와이프 삭제.
 
 ### 설정
-- 그룹: 이름 변경, 초대 코드 보기/복사/재발급, 가족 초대하기, 멤버 목록, 그룹 나가기(확인창).
+- 그룹: 이름 변경, 초대 코드 보기/복사/재발급("M월 D일까지 유효" 표시, 만료 시 눈에 띄는 재발급 버튼), 가족 초대하기, 멤버 목록, 그룹 나가기(확인창).
 - 새 그룹 만들기 / 코드로 참여.
 - 위치 알림 켜기/끄기(이 기기), 권한 상태와 시스템 설정 이동 버튼.
 - 내 이름 변경, 로그아웃.
