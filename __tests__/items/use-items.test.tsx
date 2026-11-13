@@ -23,8 +23,6 @@ jest.mock('@/src/items/item-api', () => ({
   insertItem: jest.fn(),
   updateItem: jest.fn(),
   deleteItems: jest.fn(),
-  clearDoneItems: jest.fn(),
-  clearListItems: jest.fn(),
   moveItems: jest.fn(),
 }));
 
@@ -174,7 +172,12 @@ it('clears only done items from the cache', async () => {
     result.current.mutate({ listId: 'l1' });
   });
   expect(client.getQueryData<Item[]>(qk.items('l1'))!.map((i) => i.id)).toEqual(['open']);
-  expect(mocked.clearDoneItems).toHaveBeenCalledWith('l1');
+  // 재실행 때 다시 고르지 않도록 지울 id를 변수에 담는다(A2).
+  expect(client.getMutationCache().getAll()[0].state.variables).toEqual({
+    listId: 'l1',
+    ids: ['done'],
+  });
+  expect(mocked.deleteItems).toHaveBeenCalledWith(['done']);
 });
 
 it('clears the whole list from the cache', async () => {
@@ -184,7 +187,21 @@ it('clears the whole list from the cache', async () => {
     result.current.mutate({ listId: 'l1' });
   });
   expect(client.getQueryData(qk.items('l1'))).toEqual([]);
-  expect(mocked.clearListItems).toHaveBeenCalledWith('l1');
+  expect(client.getMutationCache().getAll()[0].state.variables).toEqual({
+    listId: 'l1',
+    ids: ['a', 'b'],
+  });
+  expect(mocked.deleteItems).toHaveBeenCalledWith(['a', 'b']);
+});
+
+it('does not run a clear when nothing in the cache matches', async () => {
+  client.setQueryData(qk.items('l1'), [item('open')]);
+  const { result } = await renderHook(() => useClearDone(), { wrapper });
+  await act(async () => {
+    result.current.mutate({ listId: 'l1' });
+  });
+  expect(mocked.deleteItems).not.toHaveBeenCalled();
+  expect(client.getMutationCache().getAll()).toHaveLength(0);
 });
 
 it('ignores a whitespace-only item name on update', async () => {

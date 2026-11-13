@@ -26,8 +26,6 @@ jest.mock('@/src/items/item-api', () => ({
   insertItem: jest.fn(),
   updateItem: jest.fn(),
   deleteItems: jest.fn(),
-  clearDoneItems: jest.fn(),
-  clearListItems: jest.fn(),
   moveItems: jest.fn(),
 }));
 const api = itemApi as jest.Mocked<typeof itemApi>;
@@ -79,6 +77,9 @@ describe('offline queue (Review Focus 5)', () => {
     const clear = await renderHook(() => useClearList(), { wrapper });
     await act(async () => {
       move.result.current.mutate({ fromListId: 'l1', toListId: 'l2', ids: ['a'] });
+    });
+    // 비우기는 이동 결과(낙관적 반영)가 화면에 보인 뒤에 누른다.
+    await act(async () => {
       clear.result.current.mutate({ listId: 'l2' });
     });
 
@@ -89,7 +90,7 @@ describe('offline queue (Review Focus 5)', () => {
         .filter((m) => m.state.isPaused);
     await waitFor(() => expect(paused()).toHaveLength(2));
     expect(api.moveItems).not.toHaveBeenCalled();
-    expect(api.clearListItems).not.toHaveBeenCalled();
+    expect(api.deleteItems).not.toHaveBeenCalled();
 
     await persistQueryClientSave({
       queryClient: first,
@@ -106,13 +107,15 @@ describe('offline queue (Review Focus 5)', () => {
 
     const calls: string[] = [];
     api.moveItems.mockImplementation(async () => void calls.push('move'));
-    api.clearListItems.mockImplementation(async () => void calls.push('clear'));
+    api.deleteItems.mockImplementation(async () => void calls.push('clear'));
     onlineManager.setOnline(true);
     await second.resumePausedMutations();
 
     expect(calls).toEqual(['move', 'clear']);
     expect(api.moveItems).toHaveBeenCalledWith('l2', ['a']);
-    expect(api.clearListItems).toHaveBeenCalledWith('l2');
+    // 오프라인에서 보이던 항목(c, 옮겨 온 a)만 지운다. 그 사이 다른 멤버가 l2에 넣은 항목은 남는다(A2).
+    expect(api.deleteItems).toHaveBeenCalledTimes(1);
+    expect(api.deleteItems).toHaveBeenCalledWith(['c', 'a']);
     disposeClient(second);
   });
 });

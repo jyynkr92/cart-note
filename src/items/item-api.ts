@@ -44,14 +44,6 @@ export async function deleteItems(ids: string[]): Promise<void> {
   check(await supabase.from('items').delete().in('id', ids));
 }
 
-export async function clearDoneItems(listId: string): Promise<void> {
-  check(await supabase.from('items').delete().eq('list_id', listId).eq('is_done', true));
-}
-
-export async function clearListItems(listId: string): Promise<void> {
-  check(await supabase.from('items').delete().eq('list_id', listId));
-}
-
 export async function moveItems(toListId: string, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   check(await supabase.from('items').update({ list_id: toListId }).in('id', ids));

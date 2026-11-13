@@ -1,4 +1,4 @@
-import { useMutation, useQuery, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { invalidateWhenIdle, newId, QUEUE_SCOPE, withPrepare } from '@/src/lib/mutation-utils';
 import { mk, qk } from '@/src/lib/query-keys';
 import { normalizeName } from '@/src/lib/text';
@@ -20,6 +20,8 @@ type AddItemVars = AddItemInput & { id: string; createdAt: string };
 type ToggleVars = { item: Item; isDone: boolean; doneAt: string | null };
 export type UpdateItemInput = { id: string; name?: string; note?: string | null };
 type MoveVars = { fromListId: string; toListId: string; ids: string[] };
+/** 비우기: 누를 때 보이던 항목 id를 담는다. 재실행 때 list_id로 다시 고르면 그 사이 남이 넣은 항목까지 지운다. */
+type ClearVars = { listId: string; ids: string[] };
 
 type Ctx = { prev: [string, Item[] | undefined][] };
 
@@ -141,17 +143,18 @@ export function registerItemMutations(qc: QueryClient) {
     error: '삭제하지 못했어요',
   });
 
-  define<{ listId: string }>(qc, {
+  define<ClearVars>(qc, {
     key: mk.clearDone,
-    run: (v) => api.clearDoneItems(v.listId),
+    // ids가 없는(이전 버전에서 영속화된) 변수는 무엇을 지울지 알 수 없으므로 아무것도 지우지 않는다.
+    run: (v) => api.deleteItems(v.ids ?? []),
     lists: (_qc, v) => [v.listId],
     apply: (qc, v) => patchList(qc, v.listId, (old) => old.filter((i) => !i.is_done)),
     error: '완료 항목을 지우지 못했어요',
   });
 
-  define<{ listId: string }>(qc, {
+  define<ClearVars>(qc, {
     key: mk.clearList,
-    run: (v) => api.clearListItems(v.listId),
+    run: (v) => api.deleteItems(v.ids ?? []),
     lists: (_qc, v) => [v.listId],
     apply: (qc, v) => patchList(qc, v.listId, () => []),
     error: '목록을 비우지 못했어요',
@@ -213,12 +216,26 @@ export function useDeleteItems() {
   });
 }
 
+function cachedIds(qc: QueryClient, listId: string, keep: (i: Item) => boolean): string[] {
+  return (qc.getQueryData<Item[]>(qk.items(listId)) ?? []).filter(keep).map((i) => i.id);
+}
+
 export function useClearDone() {
-  return useMutation<void, Error, { listId: string }, Ctx>({ mutationKey: mk.clearDone });
+  const qc = useQueryClient();
+  const m = useMutation<void, Error, ClearVars, Ctx>({ mutationKey: mk.clearDone });
+  return withPrepare(m, ({ listId }: { listId: string }): ClearVars | null => {
+    const ids = cachedIds(qc, listId, (i) => i.is_done);
+    return ids.length ? { listId, ids } : null;
+  });
 }
 
 export function useClearList() {
-  return useMutation<void, Error, { listId: string }, Ctx>({ mutationKey: mk.clearList });
+  const qc = useQueryClient();
+  const m = useMutation<void, Error, ClearVars, Ctx>({ mutationKey: mk.clearList });
+  return withPrepare(m, ({ listId }: { listId: string }): ClearVars | null => {
+    const ids = cachedIds(qc, listId, () => true);
+    return ids.length ? { listId, ids } : null;
+  });
 }
 
 export function useMoveItems() {

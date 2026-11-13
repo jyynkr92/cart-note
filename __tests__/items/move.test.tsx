@@ -51,8 +51,6 @@ jest.mock('@/src/items/item-api', () => ({
   insertItem: jest.fn(),
   updateItem: jest.fn(),
   deleteItems: jest.fn(),
-  clearDoneItems: jest.fn(),
-  clearListItems: jest.fn(),
   moveItems: jest.fn(),
 }));
 
