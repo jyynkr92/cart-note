@@ -12,6 +12,7 @@ import {
   searchPlaces,
   type ListLocation,
 } from '@/src/locations/location-api';
+import { SearchRateLimitedError } from '@/src/locations/search-errors';
 import { createQueryClient } from '@/src/lib/query-client';
 import { qk } from '@/src/lib/query-keys';
 import { disposeClient } from '@/test-utils/dispose-client';
@@ -183,6 +184,14 @@ it('shows a retry message when search fails, and retries', async () => {
   await fireEvent.press(screen.getByRole('button', { name: '다시 시도' }));
   expect(await screen.findByRole('button', { name: '코스트코 추가' })).toBeTruthy();
   expect(search).toHaveBeenCalledTimes(2);
+});
+
+it('tells the user to wait when the search quota is used up', async () => {
+  search.mockRejectedValueOnce(new SearchRateLimitedError());
+  await renderScreen();
+  await doSearch();
+  expect(await screen.findByText('검색이 너무 많아요. 잠시 후 다시 시도해 주세요')).toBeTruthy();
+  expect(screen.queryByText('검색에 실패했어요. 다시 시도해 주세요')).toBeNull();
 });
 
 it('does not search on a blank query', async () => {

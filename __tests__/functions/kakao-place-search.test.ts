@@ -11,13 +11,16 @@ const post = (body: unknown, headers: Record<string, string> = { Authorization: 
 const kakaoOk = (documents: unknown[]) =>
   Promise.resolve(new Response(JSON.stringify({ documents }), { status: 200 }));
 
-function deps(over: Partial<Deps> = {}): Deps & { fetch: jest.Mock; getUser: jest.Mock } {
+function deps(
+  over: Partial<Deps> = {},
+): Deps & { fetch: jest.Mock; getUser: jest.Mock; consumeQuota: jest.Mock } {
   return {
     fetch: jest.fn(() => kakaoOk([])),
     kakaoKey: 'SECRET-KEY',
     getUser: jest.fn(async () => ({ id: 'u1' })),
+    consumeQuota: jest.fn(async () => true),
     ...over,
-  } as Deps & { fetch: jest.Mock; getUser: jest.Mock };
+  } as Deps & { fetch: jest.Mock; getUser: jest.Mock; consumeQuota: jest.Mock };
 }
 
 it('maps kakao documents to places', async () => {
@@ -149,5 +152,36 @@ describe('upstream failures', () => {
     const res = await handlePlaceSearch(post({ query: 'q' }), d);
     expect(res.status).toBe(500);
     expect(d.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('per-user quota', () => {
+  it('consumes quota with the caller\'s auth header before calling kakao', async () => {
+    const d = deps();
+    const res = await handlePlaceSearch(post({ query: '코스트코' }, { Authorization: 'Bearer user-jwt' }), d);
+    expect(res.status).toBe(200);
+    expect(d.consumeQuota).toHaveBeenCalledWith('Bearer user-jwt');
+    expect(d.consumeQuota.mock.invocationCallOrder[0]).toBeLessThan(d.fetch.mock.invocationCallOrder[0]);
+  });
+
+  it('429 rate_limited when the quota is used up, without calling kakao', async () => {
+    const d = deps({ consumeQuota: jest.fn(async () => false) });
+    const res = await handlePlaceSearch(post({ query: '코스트코' }), d);
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ error: 'rate_limited' });
+    expect(d.fetch).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the quota check errors', async () => {
+    const d = deps({ consumeQuota: jest.fn(async () => Promise.reject(new Error('db down'))) });
+    const res = await handlePlaceSearch(post({ query: '코스트코' }), d);
+    expect(res.status).toBeGreaterThanOrEqual(500);
+    expect(d.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not consume quota for unauthenticated requests', async () => {
+    const d = deps({ getUser: jest.fn(async () => null) });
+    expect((await handlePlaceSearch(post({ query: 'q' }), d)).status).toBe(401);
+    expect(d.consumeQuota).not.toHaveBeenCalled();
   });
 });

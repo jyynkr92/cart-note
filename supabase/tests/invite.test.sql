@@ -14,7 +14,7 @@ select throws_ok(
   $$insert into families (name, invite_code) values ('x', '123456')$$,
   '23514', null, '6-digit invite code rejected by check');
 select col_not_null('families', 'invite_code_expires_at', 'invite_code_expires_at is not null');
-select has_index('join_attempts', 'join_attempts_attempted_at_idx', 'index on join_attempts.attempted_at');
+select has_index('public', 'join_attempts', 'join_attempts_attempted_at_idx', 'index on join_attempts.attempted_at');
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';

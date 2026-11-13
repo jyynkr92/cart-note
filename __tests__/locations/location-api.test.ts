@@ -4,6 +4,7 @@ import {
   searchPlaces,
 } from '@/src/locations/location-api';
 import { supabase } from '@/src/lib/supabase';
+import { SearchRateLimitedError } from '@/src/locations/search-errors';
 
 jest.mock('@/src/lib/supabase', () => ({
   supabase: { from: jest.fn(), functions: { invoke: jest.fn() } },
@@ -105,6 +106,22 @@ describe('insertLocation', () => {
     });
     await expect(insertLocation(row)).rejects.toMatchObject({ code: '42501' });
   });
+});
+
+it('searchPlaces turns a 429 into SearchRateLimitedError', async () => {
+  invoke.mockResolvedValue({
+    data: null,
+    error: Object.assign(new Error('Edge Function returned a non-2xx status code'), {
+      context: new Response(JSON.stringify({ error: 'rate_limited' }), { status: 429 }),
+    }),
+  });
+  await expect(searchPlaces('코스트코')).rejects.toBeInstanceOf(SearchRateLimitedError);
+});
+
+it('searchPlaces rethrows other failures as-is', async () => {
+  const err = Object.assign(new Error('non-2xx'), { context: new Response('{}', { status: 502 }) });
+  invoke.mockResolvedValue({ data: null, error: err });
+  await expect(searchPlaces('코스트코')).rejects.toBe(err);
 });
 
 it('searchPlaces invokes the edge function and returns places', async () => {

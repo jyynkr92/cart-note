@@ -1,5 +1,6 @@
 import { supabase } from '@/src/lib/supabase';
 import type { Database } from '@/src/lib/database.types';
+import { SearchRateLimitedError } from './search-errors';
 
 export type ListLocation = Database['public']['Tables']['list_locations']['Row'];
 export type Place = {
@@ -15,12 +16,16 @@ function check(res: { error: unknown }) {
   if (res.error) throw res.error;
 }
 
-/** Edge Function으로 카카오 키워드 검색. 실패(401/502 등)는 오류로 던진다. */
+/** Edge Function으로 카카오 키워드 검색. 실패(401/502 등)는 오류로 던지고, 할당량 초과(429)는 구분해 던진다. */
 export async function searchPlaces(query: string): Promise<Place[]> {
   const { data, error } = await supabase.functions.invoke('kakao-place-search', {
     body: { query },
   });
-  if (error) throw error;
+  if (error) {
+    const status = (error as { context?: { status?: unknown } }).context?.status;
+    if (status === 429) throw new SearchRateLimitedError();
+    throw error;
+  }
   return (data as { places?: Place[] } | null)?.places ?? [];
 }
 

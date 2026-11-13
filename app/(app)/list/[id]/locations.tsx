@@ -11,6 +11,7 @@ import { normalizeName } from '@/src/lib/text';
 import { useTopInset } from '@/src/lib/use-top-inset';
 import { useLists } from '@/src/lists/use-lists';
 import { searchPlaces, type ListLocation, type Place } from '@/src/locations/location-api';
+import { SearchRateLimitedError } from '@/src/locations/search-errors';
 import { useAddLocation, useDeleteLocation, useLocations } from '@/src/locations/use-locations';
 
 export default function Locations() {
@@ -105,7 +106,11 @@ export default function Locations() {
           </View>
         ) : search.isError ? (
           <View className="items-center gap-4 py-6">
-            <Text>검색에 실패했어요. 다시 시도해 주세요</Text>
+            <Text>
+              {search.error instanceof SearchRateLimitedError
+                ? '검색이 너무 많아요. 잠시 후 다시 시도해 주세요'
+                : '검색에 실패했어요. 다시 시도해 주세요'}
+            </Text>
             <Button onPress={() => search.variables && search.mutate(search.variables)}>
               <Text>다시 시도</Text>
             </Button>

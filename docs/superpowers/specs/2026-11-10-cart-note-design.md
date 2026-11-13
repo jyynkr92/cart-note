@@ -126,6 +126,7 @@ items             id, list_id, family_id, name, note (nullable), is_done, done_a
 
 ### 마트 지점 관리
 - 검색창 → Edge Function `kakao-place-search` → 결과 목록 → 탭하여 추가.
+- 검색은 사용자당 1시간 60회까지(`consume_search_quota`). 초과 시 429와 "검색이 너무 많아요. 잠시 후 다시 시도해 주세요". (보안 점검(/cso) 반영)
 - 등록된 지점 목록, 스와이프 삭제.
 
 ### 설정

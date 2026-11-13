@@ -71,6 +71,7 @@
 | [ ] | Edge Function 실행 | `supabase/functions/.env`에 `KAKAO_REST_KEY` 설정 후 `npx supabase functions serve` | `index.ts`(Deno 배선)가 오류 없이 기동. Deno가 없어 아직 한 번도 실행되지 않았음 | 미수행 |
 | [ ] | 카카오 실검색 | 지점 추가에서 "코스트코 양재" 검색 | 결과 목록 표시. 실패 시 재시도 안내 | 미수행 |
 | [ ] | 인증 | `npx supabase functions serve` 실행 중에 `curl -i -X POST 'http://127.0.0.1:55321/functions/v1/kakao-place-search' -H 'Content-Type: application/json' -d '{"query":"코스트코 양재"}'` (Authorization 헤더 없이) | HTTP 401. 로그인 사용자의 토큰을 붙이면 200 | 미수행 |
+| [ ] | 검색 할당량 | `npx supabase functions serve` 실행 중에 한 사용자로 1시간 안에 61번 검색 | 61번째는 HTTP 429 `{"error":"rate_limited"}`, 앱은 "검색이 너무 많아요. 잠시 후 다시 시도해 주세요" | 미수행 |
 
 ## 6. 오프라인과 동기화
 

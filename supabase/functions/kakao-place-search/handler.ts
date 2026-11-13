@@ -12,6 +12,8 @@ export type Deps = {
   fetch: typeof fetch;
   kakaoKey: string;
   getUser: (authHeader: string) => Promise<{ id: string } | null>;
+  /** 호출자 권한으로 사용자별 할당량을 1회 소비한다. 초과면 false. */
+  consumeQuota: (authHeader: string) => Promise<boolean>;
 };
 
 const KAKAO_URL = 'https://dapi.kakao.com/v2/local/search/keyword.json';
@@ -72,6 +74,16 @@ export async function handlePlaceSearch(req: Request, deps: Deps): Promise<Respo
   if (!query) return json(400, { error: 'query required' });
 
   if (!deps.kakaoKey) return json(500, { error: 'search unavailable' });
+
+  // 카카오 호출 전에 사용자별 할당량을 소비한다. 확인이 실패하면 막는다(fail closed).
+  let allowed: boolean;
+  try {
+    allowed = await deps.consumeQuota(auth);
+  } catch {
+    console.error('search quota check failed');
+    return json(503, { error: 'search unavailable' });
+  }
+  if (!allowed) return json(429, { error: 'rate_limited' });
 
   try {
     const url = `${KAKAO_URL}?${new URLSearchParams({ query, size: String(PAGE_SIZE) })}`;

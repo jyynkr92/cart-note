@@ -145,13 +145,30 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"search_usage": {
+                  Row: {
+                    "used_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "used_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "used_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            "create_family":
+            "consume_search_quota":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"create_family":
 { Args: { "p_name": string }; Returns: string
                            },
 "family_item_count":
