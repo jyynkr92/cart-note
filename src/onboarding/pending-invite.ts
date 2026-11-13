@@ -25,7 +25,9 @@ export async function getPendingInvite(now: number = Date.now()): Promise<string
     if (raw === null) return null;
     const stored = parse(raw);
     const code = stored ? normalizeInviteCode(stored.code) : null;
-    if (!stored || !code || now - stored.at > PENDING_INVITE_MAX_AGE_MS) {
+    const age = stored ? now - stored.at : NaN;
+    // 나이가 음수면(기기 시계를 되돌림) 실제 나이를 알 수 없으므로 만료로 본다.
+    if (!stored || !code || !(age >= 0 && age <= PENDING_INVITE_MAX_AGE_MS)) {
       await AsyncStorage.removeItem(KEY).catch(() => {});
       return null;
     }

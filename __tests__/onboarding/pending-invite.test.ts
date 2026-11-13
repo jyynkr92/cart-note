@@ -63,6 +63,12 @@ describe('expiry (A14)', () => {
     expect(await getPendingInvite(T0 + 8 * DAY)).toBeNull();
   });
 
+  it('treats a capture time in the future (clock moved back) as expired (B10)', async () => {
+    await setPendingInvite('12345678', T0);
+    expect(await getPendingInvite(T0 - 1)).toBeNull();
+    expect(await getPendingInvite(T0)).toBeNull();
+  });
+
   it('treats a stored value without a capture time as absent and clears it', async () => {
     await AsyncStorage.setItem('cartnote.pendingInvite', '12345678');
     expect(await getPendingInvite(T0)).toBeNull();
