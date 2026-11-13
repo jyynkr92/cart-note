@@ -42,6 +42,10 @@ function isCachedId(qc: QueryClient, prefixes: string[], id: unknown): boolean {
   );
 }
 
+function isFetchingAny(qc: QueryClient, prefixes: string[]): boolean {
+  return prefixes.some((p) => qc.isFetching({ queryKey: [p] }) > 0);
+}
+
 /** DELETE 대상이 이 기기 캐시에 있는 행인지. 없으면 다른 그룹의 삭제이거나 이미 반영된 삭제다. */
 const DELETE_CACHES: Record<RealtimeTable, string[]> = {
   items: ['items'],
@@ -87,7 +91,19 @@ export function applyChange(
 ): void {
   const isDelete = payload.eventType === 'DELETE';
   // DELETE는 family_id로 필터링할 수 없어 모든 그룹의 삭제가 온다 → 캐시에 없는 행은 무시한다(무효화 폭주 방지).
-  if (isDelete && !isCachedId(qc, DELETE_CACHES[table], (payload.old as Row | null)?.id)) return;
+  // 단, 그 캐시를 조회하는 중이면 응답에 삭제된 행이 섞일 수 있으므로 무시하지 않는다.
+  if (isDelete) {
+    const prefixes = DELETE_CACHES[table];
+    const oldId = (payload.old as Row | null)?.id;
+    const relevant =
+      isCachedId(qc, prefixes, oldId) ||
+      (typeof oldId === 'string' && !!oldId && isFetchingAny(qc, prefixes));
+    if (!relevant) {
+      // 다른 목록(홈 카드)의 미완료 개수는 바뀌었을 수 있다. 큐가 바쁘면 invalidateWhenIdle이 맞춘다.
+      if (table === 'items' && !isBusy(qc)) inv(qc, ['lists']);
+      return;
+    }
+  }
   const row = payload.new as Row;
   const busy = isBusy(qc);
   switch (table) {

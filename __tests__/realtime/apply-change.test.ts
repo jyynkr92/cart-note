@@ -218,7 +218,13 @@ describe('DELETE events for rows that are not cached', () => {
     qc.setQueryData(qk.allLocations(), [{ id: 'y', list_id: 'l2' }]);
   });
 
-  it('items: ignores an id that is in no items cache', () => {
+  it('items: an uncached id only refreshes the home counts (B4)', () => {
+    applyChange(qc, 'items', change('DELETE', null, { id: 'other-group-item' }));
+    expect(keys()).toEqual([['lists']]);
+  });
+
+  it('items: an uncached id does nothing while the queue is busy (B4)', () => {
+    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
     applyChange(qc, 'items', change('DELETE', null, { id: 'other-group-item' }));
     expect(spy).not.toHaveBeenCalled();
   });
@@ -234,7 +240,8 @@ describe('DELETE events for rows that are not cached', () => {
   });
 
   it('ignores a DELETE without an old id', () => {
-    applyChange(qc, 'items', change('DELETE', null, {}));
+    applyChange(qc, 'lists', change('DELETE', null, {}));
+    applyChange(qc, 'list_locations', change('DELETE', null, {}));
     expect(spy).not.toHaveBeenCalled();
   });
 
@@ -247,6 +254,41 @@ describe('DELETE events for rows that are not cached', () => {
     jest.spyOn(qc, 'isMutating').mockReturnValue(1);
     applyChange(qc, 'items', change('DELETE', null, { id: 'a' }));
     applyChange(qc, 'lists', change('DELETE', null, { id: 'l1' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// B4: 조회가 진행 중이면 그 결과에 삭제된 행이 섞여 들어올 수 있다 → 캐시에 없어도 무시하지 않고 무효화한다.
+describe('uncached DELETE while a fetch for that cache is in flight (B4)', () => {
+  const fetching = (prefix: string) =>
+    jest
+      .spyOn(qc, 'isFetching')
+      .mockImplementation((f?: { queryKey?: readonly unknown[] }) =>
+        f?.queryKey?.[0] === prefix ? 1 : 0
+      );
+
+  it('items: invalidates items and lists', () => {
+    fetching('items');
+    applyChange(qc, 'items', change('DELETE', null, { id: 'new-row' }));
+    expect(keys()).toEqual(expect.arrayContaining([['items'], ['lists']]));
+  });
+
+  it('lists: invalidates lists', () => {
+    fetching('lists');
+    applyChange(qc, 'lists', change('DELETE', null, { id: 'new-list' }));
+    expect(keys()).toEqual([['lists']]);
+  });
+
+  it('list_locations: invalidates when allLocations is being fetched', () => {
+    fetching('allLocations');
+    applyChange(qc, 'list_locations', change('DELETE', null, { id: 'new-loc' }));
+    expect(keys()).toEqual(expect.arrayContaining([['locations'], qk.allLocations(), ['lists']]));
+  });
+
+  it('still respects the busy guard for items/lists', () => {
+    fetching('items');
+    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
+    applyChange(qc, 'items', change('DELETE', null, { id: 'new-row' }));
     expect(spy).not.toHaveBeenCalled();
   });
 });
