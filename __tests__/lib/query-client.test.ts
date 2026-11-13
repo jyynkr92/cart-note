@@ -117,6 +117,52 @@ describe('offline queue (Review Focus 5)', () => {
   });
 });
 
+describe('persisted queue lifetime (A1)', () => {
+  it('restores and resumes a paused mutation saved two days ago', async () => {
+    onlineManager.setOnline(false);
+    const first = createQueryClient();
+    first.setQueryData(qk.items('l1'), [item('a'), item('b')]);
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: first }, children);
+    const del = await renderHook(() => useDeleteItems(), { wrapper });
+    await act(async () => {
+      del.result.current.mutate({ listId: 'l1', ids: ['a'] });
+    });
+    await waitFor(() =>
+      expect(first.getMutationCache().getAll().filter((m) => m.state.isPaused)).toHaveLength(1)
+    );
+
+    await persistQueryClientSave({
+      queryClient: first,
+      persister,
+      buster: persistOptions.buster,
+      dehydrateOptions: persistOptions.dehydrateOptions,
+    });
+    // 이틀 전에 저장된 캐시로 만든다(Date.now를 바꾸면 persister의 쓰기 throttle이 멈춘다).
+    const saved = (await persister.restoreClient())!;
+    await persister.removeClient();
+    await AsyncStorage.setItem(
+      'cart-note-query-cache',
+      JSON.stringify({ ...saved, timestamp: saved.timestamp - 2 * 24 * 60 * 60 * 1000 })
+    );
+    disposeClient(first);
+
+    const second = createQueryClient();
+    await persistQueryClientRestore({
+      queryClient: second,
+      persister,
+      maxAge: persistOptions.maxAge,
+      buster: persistOptions.buster,
+    });
+    expect(second.getMutationCache().getAll()).toHaveLength(1);
+
+    onlineManager.setOnline(true);
+    await second.resumePausedMutations();
+    expect(api.deleteItems).toHaveBeenCalledWith(['a']);
+    disposeClient(second);
+  });
+});
+
 describe('queue drain reconciliation', () => {
   it.each([
     ['fails', true],

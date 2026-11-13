@@ -41,7 +41,8 @@ export const persister = createAsyncStoragePersister({
 
 export const persistOptions: PersistQueryClientProviderProps['persistOptions'] = {
   persister,
-  maxAge: DAY_MS,
+  // 오프라인 큐(mutation gcTime 7일)가 복원 시 통째로 버려지지 않도록 같은 기간으로 둔다.
+  maxAge: DAY_MS * 7,
   buster: '1',
   dehydrateOptions: {
     // 온보딩 상태는 사용자/서버 상태에 따라 바뀌므로 디스크에 남기지 않는다.
