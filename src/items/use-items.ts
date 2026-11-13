@@ -35,6 +35,16 @@ function patchList(qc: QueryClient, listId: string, fn: (old: Item[]) => Item[])
   qc.setQueryData<Item[]>(qk.items(listId), (old) => (old ? fn(old) : old));
 }
 
+/**
+ * 비우기의 낙관적 반영: 변수에 담긴 id만 캐시에서 뺀다(서버가 지울 수 있는 것과 같은 범위).
+ * id가 없는 이전 형식 변수는 무엇을 지울지 모르므로 캐시를 바꾸지 않는다.
+ */
+function removeIds(qc: QueryClient, v: { listId: string; ids?: string[] }) {
+  if (!v.ids?.length) return;
+  const ids = new Set(v.ids);
+  patchList(qc, v.listId, (old) => old.filter((i) => !ids.has(i.id)));
+}
+
 function rollback(qc: QueryClient, ctx: Ctx | undefined) {
   for (const [id, data] of ctx?.prev ?? []) {
     if (data) qc.setQueryData(qk.items(id), data);
@@ -148,7 +158,7 @@ export function registerItemMutations(qc: QueryClient) {
     // ids가 없는(이전 버전에서 영속화된) 변수는 무엇을 지울지 알 수 없으므로 아무것도 지우지 않는다.
     run: (v) => api.clearDoneItems(v.listId, v.ids ?? []),
     lists: (_qc, v) => [v.listId],
-    apply: (qc, v) => patchList(qc, v.listId, (old) => old.filter((i) => !i.is_done)),
+    apply: (qc, v) => removeIds(qc, v),
     error: '완료 항목을 지우지 못했어요',
   });
 
@@ -156,7 +166,7 @@ export function registerItemMutations(qc: QueryClient) {
     key: mk.clearList,
     run: (v) => api.clearListItems(v.listId, v.ids ?? []),
     lists: (_qc, v) => [v.listId],
-    apply: (qc, v) => patchList(qc, v.listId, () => []),
+    apply: (qc, v) => removeIds(qc, v),
     error: '목록을 비우지 못했어요',
   });
 

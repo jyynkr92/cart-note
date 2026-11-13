@@ -229,6 +229,23 @@ describe('menu', () => {
     expect(await screen.findByRole('menuitem', { name: '완료 항목 지우기' })).toBeDisabled();
   });
 
+  it('disables "목록 비우기" until the items are loaded (B12)', async () => {
+    items.mockReturnValue(new Promise(() => {}));
+    await renderWithClient(<ListDetail />);
+    await openMenu();
+    expect(await screen.findByRole('menuitem', { name: '목록 비우기' })).toBeDisabled();
+  });
+
+  it('disables "목록 비우기" for an empty list (B12)', async () => {
+    items.mockResolvedValue([]);
+    await renderWithClient(<ListDetail />);
+    await waitFor(() => expect(items).toHaveBeenCalled());
+    await openMenu();
+    await waitFor(async () =>
+      expect(await screen.findByRole('menuitem', { name: '목록 비우기' })).toBeDisabled()
+    );
+  });
+
   it('empties the list only after confirming', async () => {
     items.mockResolvedValue([item({ id: 'i1', name: '우유' })]);
     await renderWithClient(<ListDetail />);

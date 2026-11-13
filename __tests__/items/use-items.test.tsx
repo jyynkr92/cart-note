@@ -13,7 +13,7 @@ import {
   useUpdateItem,
 } from '@/src/items/use-items';
 import { createQueryClient } from '@/src/lib/query-client';
-import { qk } from '@/src/lib/query-keys';
+import { mk, qk } from '@/src/lib/query-keys';
 import { toast } from '@/src/lib/toast';
 
 jest.mock('@/src/lib/supabase', () => ({ supabase: {} }));
@@ -216,4 +216,38 @@ it('ignores a whitespace-only item name on update', async () => {
   expect(mocked.updateItem).not.toHaveBeenCalled();
   expect(client.getQueryData<Item[]>(qk.items('l1'))![0].name).toBe('a');
   expect(client.getMutationCache().getAll()).toHaveLength(0);
+});
+
+// B12: 낙관적 반영은 변수에 담긴 id만 지운다. id가 없는 이전 형식 변수는 아무것도 바꾸지 않는다.
+describe('clear optimistic update (B12)', () => {
+  const run = (key: readonly unknown[], vars: unknown) =>
+    act(async () => {
+      await client.getMutationCache().build(client, { mutationKey: key }).execute(vars);
+    });
+
+  it('clearDone removes only the captured ids', async () => {
+    client.setQueryData(qk.items('l1'), [
+      item('a', { is_done: true }),
+      item('b', { is_done: true }),
+      item('c'),
+    ]);
+    await run(mk.clearDone, { listId: 'l1', ids: ['a'] });
+    expect(client.getQueryData<Item[]>(qk.items('l1'))!.map((i) => i.id)).toEqual(['b', 'c']);
+  });
+
+  it('clearList removes only the captured ids', async () => {
+    client.setQueryData(qk.items('l1'), [item('a'), item('b')]);
+    await run(mk.clearList, { listId: 'l1', ids: ['a'] });
+    expect(client.getQueryData<Item[]>(qk.items('l1'))!.map((i) => i.id)).toEqual(['b']);
+  });
+
+  it.each([
+    ['clearDone', mk.clearDone],
+    ['clearList', mk.clearList],
+  ])('%s with legacy variables (no ids) changes nothing', async (_n, key) => {
+    client.setQueryData(qk.items('l1'), [item('a', { is_done: true }), item('b')]);
+    await run(key, { listId: 'l1' });
+    expect(client.getQueryData<Item[]>(qk.items('l1'))!.map((i) => i.id)).toEqual(['a', 'b']);
+    expect(mocked.deleteItems).not.toHaveBeenCalled();
+  });
 });

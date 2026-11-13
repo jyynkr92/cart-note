@@ -235,7 +235,10 @@ export default function ListDetail() {
                 onPress={() => clearDone.mutate({ listId })}>
                 <Text>완료 항목 지우기</Text>
               </DropdownMenuItem>
-              <DropdownMenuItem onPress={() => setMode('clear')}>
+              <DropdownMenuItem
+                // 항목을 불러오기 전에는 지울 대상(id)을 알 수 없다.
+                disabled={!items.data?.length}
+                onPress={() => setMode('clear')}>
                 <Text>목록 비우기</Text>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
