@@ -231,6 +231,16 @@ describe('add list', () => {
     );
   });
 
+  it('exposes the kind toggle as radio buttons with the selected state', async () => {
+    await renderWithClient(<Home />);
+    await fireEvent.press(await screen.findByText('+ 목록 추가'));
+    expect(await screen.findByRole('radio', { name: '마트', selected: true })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '사이트', selected: false })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('radio', { name: '사이트' }));
+    expect(screen.getByRole('radio', { name: '사이트', selected: true })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '마트', selected: false })).toBeTruthy();
+  });
+
   it('can create an online list', async () => {
     await renderWithClient(<Home />);
     await fireEvent.press(await screen.findByText('+ 목록 추가'));

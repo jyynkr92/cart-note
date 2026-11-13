@@ -51,7 +51,11 @@ export default function Login() {
   return (
     <View className="flex-1 justify-center gap-4 bg-background px-6">
       <Text className="text-2xl font-bold">Cart Note</Text>
-      {linkError ? <Text className="text-destructive">{linkError}</Text> : null}
+      {linkError ? (
+        <Text accessibilityRole="alert" className="text-destructive">
+          {linkError}
+        </Text>
+      ) : null}
       {step === 'email' ? (
         <>
           <Input
@@ -63,6 +67,11 @@ export default function Login() {
             keyboardType="email-address"
             textContentType="emailAddress"
           />
+          {error ? (
+            <Text accessibilityRole="alert" className="text-destructive">
+              {error}
+            </Text>
+          ) : null}
           <Button onPress={requestCode} disabled={!emailValid || busy}>
             <Text>코드 받기</Text>
           </Button>
@@ -78,10 +87,14 @@ export default function Login() {
             textContentType="oneTimeCode"
             maxLength={6}
           />
+          {error ? (
+            <Text accessibilityRole="alert" className="text-destructive">
+              {error}
+            </Text>
+          ) : null}
           <Button onPress={submitCode} disabled={code.length !== 6 || busy}>
             <Text>확인</Text>
           </Button>
-          {error ? <Text className="text-destructive">{error}</Text> : null}
           <Button variant="ghost" onPress={requestCode} disabled={busy}>
             <Text>코드 다시 받기</Text>
           </Button>
@@ -97,7 +110,6 @@ export default function Login() {
           </Button>
         </>
       )}
-      {step === 'email' && error ? <Text className="text-destructive">{error}</Text> : null}
     </View>
   );
 }

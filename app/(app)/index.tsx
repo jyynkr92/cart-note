@@ -144,16 +144,23 @@ export default function Home() {
             maxLength={MAX_LENGTH.listName}
             autoFocus
           />
-          <View className="flex-row gap-2">
+          <View className="flex-row gap-2" accessibilityRole="radiogroup">
             <Button
               variant={kind === 'store' ? 'default' : 'outline'}
               className="flex-1"
+              // Button이 role="button"을 넣으므로 role도 덮어써야 radio로 읽힌다.
+              role="radio"
+              accessibilityRole="radio"
+              accessibilityState={{ selected: kind === 'store' }}
               onPress={() => setKind('store')}>
               <Text>마트</Text>
             </Button>
             <Button
               variant={kind === 'online' ? 'default' : 'outline'}
               className="flex-1"
+              role="radio"
+              accessibilityRole="radio"
+              accessibilityState={{ selected: kind === 'online' }}
               onPress={() => setKind('online')}>
               <Text>사이트</Text>
             </Button>

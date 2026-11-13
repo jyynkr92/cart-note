@@ -45,10 +45,14 @@ export default function Profile() {
     <View className="flex-1 justify-center gap-4 bg-background px-6">
       <Text className="text-2xl font-bold">이름을 알려 주세요</Text>
       <Input placeholder="이름" value={name} onChangeText={setName} maxLength={MAX_LENGTH.displayName} />
+      {error ? (
+        <Text accessibilityRole="alert" className="text-destructive">
+          {error}
+        </Text>
+      ) : null}
       <Button onPress={submit} disabled={!normalized || busy}>
         <Text>시작하기</Text>
       </Button>
-      {error ? <Text className="text-destructive">{error}</Text> : null}
       <Link href="/join" asChild>
         <Button variant="ghost">
           <Text>초대 코드가 있나요?</Text>

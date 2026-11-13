@@ -9,6 +9,7 @@ import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-i
 import { CURRENT_GROUP_KEY, resetCurrentGroupStore } from '@/src/groups/current-group-store';
 import { toast } from '@/src/lib/toast';
 import { qk } from '@/src/lib/query-keys';
+import { nodeAfterInput } from '@/test-utils/host-order';
 
 const mockReplace = jest.fn();
 let mockParams: Record<string, string> = {};
@@ -69,6 +70,8 @@ it.each([
   await submit();
   expect(await screen.findByText(message)).toBeTruthy();
   expect(mockReplace).not.toHaveBeenCalled();
+  // 오류는 입력란 바로 아래에 alert로 읽힌다.
+  expect(nodeAfterInput('00000000')).toEqual({ role: 'alert', text: message });
 });
 
 it('treats an unknown thrown error as a network error', async () => {

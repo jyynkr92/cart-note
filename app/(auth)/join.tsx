@@ -133,10 +133,14 @@ export default function Join() {
         keyboardType="number-pad"
         maxLength={INVITE_CODE_LENGTH}
       />
+      {error ? (
+        <Text accessibilityRole="alert" className="text-destructive">
+          {error}
+        </Text>
+      ) : null}
       <Button onPress={submit} disabled={!normalized || busy}>
         <Text>참여</Text>
       </Button>
-      {error ? <Text className="text-destructive">{error}</Text> : null}
       <Button variant="ghost" onPress={skip}>
         <Text>나중에 할게요</Text>
       </Button>

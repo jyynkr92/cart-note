@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import Login from '@/app/(auth)/login';
 import { sendOtp, verifyOtp } from '@/src/auth/auth-api';
+import { nodeAfterInput } from '@/test-utils/host-order';
 
 jest.mock('@/src/auth/auth-api', () => ({
   sendOtp: jest.fn(),
@@ -44,6 +45,23 @@ it('shows an error and resend button when verify fails', async () => {
   await fireEvent.press(screen.getByText('확인'));
   expect(await screen.findByText('코드가 올바르지 않거나 만료되었어요')).toBeTruthy();
   expect(screen.getByText('코드 다시 받기')).toBeTruthy();
+  // 오류는 입력란 바로 아래에 alert로 읽힌다.
+  expect(nodeAfterInput('000000')).toEqual({
+    role: 'alert',
+    text: '코드가 올바르지 않거나 만료되었어요',
+  });
+});
+
+it('shows a send failure as an alert right under the email input', async () => {
+  sendOtpMock.mockRejectedValue(new Error('down'));
+  await render(<Login />);
+  await fireEvent.changeText(screen.getByPlaceholderText('이메일'), 'a@b.com');
+  await fireEvent.press(screen.getByText('코드 받기'));
+  await screen.findByRole('alert');
+  expect(nodeAfterInput('이메일')).toEqual({
+    role: 'alert',
+    text: '코드를 보내지 못했어요. 잠시 후 다시 시도해 주세요',
+  });
 });
 
 it('disables the send button for an invalid email', async () => {
