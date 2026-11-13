@@ -34,6 +34,23 @@ npx supabase start
 
 로그인 코드는 실제로 발송되지 않고 이메일 테스트 UI(Mailpit, `http://127.0.0.1:55324`)에서 확인한다.
 
+### 배포 전 확인
+
+`0008_constraints.sql`은 좌표/반경 범위와 텍스트 길이 CHECK를 추가하면서 기존 행도 검사한다. 이미 데이터가 있는 DB에
+적용하기 전에 아래 쿼리로 위반 행이 없는지 확인한다. 결과가 있으면 그 행을 먼저 고치거나 지운 뒤 마이그레이션을 적용한다
+(0008은 로컬에 이미 적용됐으므로 고치지 않는다).
+
+```sql
+select 'list_locations' as tbl, id::text from public.list_locations
+  where not (lat between -90 and 90) or not (lng between -180 and 180)
+     or not (radius_m between 50 and 5000)
+     or char_length(place_name) > 200 or char_length(address) > 300
+union all select 'profiles', user_id::text from public.profiles where char_length(display_name) > 50
+union all select 'families', id::text from public.families where char_length(name) > 50
+union all select 'lists', id::text from public.lists where char_length(name) > 50
+union all select 'items', id::text from public.items where char_length(name) > 200 or char_length(note) > 1000;
+```
+
 ## 앱 환경 변수
 
 저장소 루트의 `.env`(gitignore 대상)에 둔다. 이름은 `.env.example`과 `src/lib/supabase.ts` 기준이다.
