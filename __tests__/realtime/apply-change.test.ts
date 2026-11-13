@@ -183,6 +183,7 @@ describe('list_locations', () => {
   });
 
   it('DELETE invalidates the prefixes', () => {
+    qc.setQueryData(qk.locations('l1'), [{ id: 'x', list_id: 'l1' }]);
     applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
     expect(keys()).toEqual(expect.arrayContaining([['locations'], qk.allLocations(), ['lists']]));
   });
@@ -202,7 +203,50 @@ describe('list_locations while mutations are busy', () => {
 
   it('DELETE skips the locations/lists prefixes, but still invalidates allLocations', () => {
     busy();
+    qc.setQueryData(qk.allLocations(), [{ id: 'x', list_id: 'l1' }]);
     applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
     expect(keys()).toEqual([qk.allLocations()]);
+  });
+});
+
+// DELETE는 family_id 필터를 걸 수 없어 다른 그룹의 삭제도 모두 온다. 캐시에 없는 행이면 무시한다(R2/A5).
+describe('DELETE events for rows that are not cached', () => {
+  beforeEach(() => {
+    qc.setQueryData(qk.items('l1'), [item('a')]);
+    qc.setQueryData(qk.lists('f1'), [{ id: 'l1' }]);
+    qc.setQueryData(qk.locations('l1'), [{ id: 'x', list_id: 'l1' }]);
+    qc.setQueryData(qk.allLocations(), [{ id: 'y', list_id: 'l2' }]);
+  });
+
+  it('items: ignores an id that is in no items cache', () => {
+    applyChange(qc, 'items', change('DELETE', null, { id: 'other-group-item' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('lists: ignores an id that is in no lists cache', () => {
+    applyChange(qc, 'lists', change('DELETE', null, { id: 'other-group-list' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('list_locations: ignores an id that is in neither locations nor allLocations', () => {
+    applyChange(qc, 'list_locations', change('DELETE', null, { id: 'other-group-loc' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('ignores a DELETE without an old id', () => {
+    applyChange(qc, 'items', change('DELETE', null, {}));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('list_locations: a row only in allLocations still counts as cached', () => {
+    applyChange(qc, 'list_locations', change('DELETE', null, { id: 'y' }));
+    expect(keys()).toEqual(expect.arrayContaining([['locations'], qk.allLocations(), ['lists']]));
+  });
+
+  it('a cached id still respects the busy guard', () => {
+    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
+    applyChange(qc, 'items', change('DELETE', null, { id: 'a' }));
+    applyChange(qc, 'lists', change('DELETE', null, { id: 'l1' }));
+    expect(spy).not.toHaveBeenCalled();
   });
 });

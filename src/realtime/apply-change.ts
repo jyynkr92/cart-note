@@ -32,6 +32,23 @@ function findCached(qc: QueryClient, id: string): { listId: string; item: Item }
   return undefined;
 }
 
+/** prefixes 아래 캐시된 배열 중 하나라도 id 행을 갖고 있는지. */
+function isCachedId(qc: QueryClient, prefixes: string[], id: unknown): boolean {
+  if (typeof id !== 'string' || !id) return false;
+  return prefixes.some((p) =>
+    qc
+      .getQueriesData<Row[]>({ queryKey: [p] })
+      .some(([, data]) => Array.isArray(data) && data.some((r) => r?.id === id))
+  );
+}
+
+/** DELETE 대상이 이 기기 캐시에 있는 행인지. 없으면 다른 그룹의 삭제이거나 이미 반영된 삭제다. */
+const DELETE_CACHES: Record<RealtimeTable, string[]> = {
+  items: ['items'],
+  lists: ['lists'],
+  list_locations: ['locations', 'allLocations'],
+};
+
 function addTo(qc: QueryClient, listId: string, row: Item) {
   qc.setQueryData<Item[]>(qk.items(listId), (old) => {
     if (!old) return old; // 캐시 없는 목록은 다음 조회 때 서버에서 가져온다.
@@ -69,6 +86,8 @@ export function applyChange(
   payload: RealtimePostgresChangesPayload<Row>
 ): void {
   const isDelete = payload.eventType === 'DELETE';
+  // DELETE는 family_id로 필터링할 수 없어 모든 그룹의 삭제가 온다 → 캐시에 없는 행은 무시한다(무효화 폭주 방지).
+  if (isDelete && !isCachedId(qc, DELETE_CACHES[table], (payload.old as Row | null)?.id)) return;
   const row = payload.new as Row;
   const busy = isBusy(qc);
   switch (table) {

@@ -11,7 +11,7 @@ const BUSY_SKIP = new Set(['onboarding', 'items', 'lists', 'locations']);
 
 /**
  * 현재 그룹의 변경을 Realtime으로 받아 쿼리 캐시에 반영한다.
- * INSERT/UPDATE는 family_id로 필터링하고, DELETE는 필터를 걸 수 없어 전체를 받아 무효화만 한다.
+ * INSERT/UPDATE는 family_id로 필터링하고, DELETE는 필터를 걸 수 없어 전체를 받되 캐시에 있는 행일 때만 무효화한다.
  */
 export function useFamilyRealtime(familyId: string | null): void {
   const qc = useQueryClient();
