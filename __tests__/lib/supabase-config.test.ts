@@ -12,3 +12,9 @@ it('creates the client with the exported auth storage key', () => {
   const options = mockCreateClient.mock.calls[0][2] as { auth: { storageKey?: string } };
   expect(options.auth.storageKey).toBe(AUTH_STORAGE_KEY);
 });
+
+it('uses the PKCE flow so a magic link only signs in the device that requested it', () => {
+  require('@/src/lib/supabase');
+  const options = mockCreateClient.mock.calls[0][2] as { auth: { flowType?: string } };
+  expect(options.auth.flowType).toBe('pkce');
+});

@@ -15,7 +15,7 @@ import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { clearUserCache } from '@/src/lib/query-client';
 import { supabase } from '@/src/lib/supabase';
 import { capturePendingInvite } from '@/src/onboarding/pending-invite';
-import { setSessionFromUrl } from './auth-api';
+import { exchangeCodeFromUrl } from './auth-api';
 
 export const LINK_ERROR_MESSAGE =
   '로그인 링크가 만료되었거나 올바르지 않아요. 코드로 로그인해 주세요';
@@ -55,7 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  // 매직링크 딥링크(cartnote://auth#access_token=…)로 세션 설정
+  // 매직링크 딥링크(cartnote://auth?code=…)를 PKCE 코드 교환으로 세션 설정.
+  // 이미 로그인돼 있으면 무시한다(남이 보낸 링크로 계정이 바뀌지 않게).
   useEffect(() => {
     const handle = (url: string | null) => {
       if (!url) return;
@@ -64,10 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (!/^cartnote:\/\/auth(?![\w.-])/.test(url)) return;
-      setSessionFromUrl(url).then(
-        () => setLinkError(null),
-        () => setLinkError(LINK_ERROR_MESSAGE)
-      );
+      supabase.auth
+        .getSession()
+        .then(({ data }) => {
+          if (data.session) return;
+          return exchangeCodeFromUrl(url).then(
+            () => setLinkError(null),
+            () => setLinkError(LINK_ERROR_MESSAGE)
+          );
+        })
+        .catch(() => setLinkError(LINK_ERROR_MESSAGE));
     };
     Linking.getInitialURL().then(handle);
     const sub = Linking.addEventListener('url', ({ url }) => handle(url));

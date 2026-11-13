@@ -19,6 +19,8 @@ export const supabase = createClient<Database>(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      // 매직링크가 링크를 요청한 기기에서만 세션이 되도록 PKCE를 쓴다(코드 검증자가 이 기기 저장소에만 있음).
+      flowType: 'pkce',
     },
   },
 );
