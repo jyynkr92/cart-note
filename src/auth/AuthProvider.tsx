@@ -10,12 +10,11 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
-import { resetGeofencing } from '@/src/geofence/sync-geofences';
-import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { clearUserCache } from '@/src/lib/query-client';
 import { supabase } from '@/src/lib/supabase';
 import { capturePendingInvite } from '@/src/onboarding/pending-invite';
 import { exchangeCodeFromUrl } from './auth-api';
+import { clearSignedOutDeviceState } from './signed-out-state';
 
 export const LINK_ERROR_MESSAGE =
   '로그인 링크가 만료되었거나 올바르지 않아요. 코드로 로그인해 주세요';
@@ -45,9 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 같은 기기의 다른 사용자가 이전 캐시(오프라인 큐 포함)를 보지 못하게 로그아웃 시 즉시 비운다.
       if (event === 'SIGNED_OUT') {
         void clearUserCache().catch(() => {});
-        void clearCurrentGroup();
-        // 로그아웃한 기기가 이전 사용자의 지점/메타로 지오펜스를 계속 돌리지 않게 멈추고 지운다.
-        void resetGeofencing();
+        // 현재 그룹, 지오펜스(이전 사용자의 지점/메타로 계속 돌지 않게), 온보딩 표시를 지운다.
+        void clearSignedOutDeviceState();
       }
       setSession(next);
       setLoading(false);

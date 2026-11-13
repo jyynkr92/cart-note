@@ -1,7 +1,10 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createFamily, fetchMyFamilies } from '@/src/groups/group-api';
+import { useFamilies } from '@/src/groups/use-groups';
+import { isNetworkError } from '@/src/lib/network-error';
 import { qk } from '@/src/lib/query-keys';
+import { clearOnboarded, isOnboarded, markOnboarded } from './onboarded-flag';
 import { getPendingInvite } from './pending-invite';
 import { hasProfile } from './profile-api';
 import { resolveOnboarding, type OnboardingStep } from './resolve-onboarding';
@@ -47,8 +50,12 @@ async function resolveForUser(userId: string, qc: QueryClient): Promise<Resolved
     await createPersonalOnce(userId);
     // 홈이 먼저 받아 둔 빈 그룹 목록을 새 그룹으로 바꾼 뒤에 ready로 넘어간다(빈 홈 방지).
     await qc.invalidateQueries({ queryKey: qk.families(), refetchType: 'all' });
+    await markOnboarded(userId);
     return { step: 'ready', pendingInvite: pending };
   }
+  // 오프라인 콜드 스타트에서 캐시로 홈을 보여 줄 수 있게 표시한다(프로필이 없으면 지운다).
+  if (next === 'ready') await markOnboarded(userId);
+  else if (next === 'profile') await clearOnboarded();
   return { step: next, pendingInvite: pending };
 }
 
@@ -67,8 +74,40 @@ export function useOnboarding(userId: string | null): State {
   });
   const { refetch } = q;
   const retry = useCallback(() => void refetch(), [refetch]);
+  const families = useFamilies().data;
+
+  // 이 사용자가 온보딩을 마친 적이 있는지(기기 로컬). 첫 확인이 서버에 닿지 못할 때만 쓴다.
+  const [flag, setFlag] = useState<{ userId: string; ok: boolean } | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    void isOnboarded(userId).then((ok) => alive && setFlag({ userId, ok }));
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+  // 캐시로 홈을 보여 준 사용자. 연결이 돌아와 재조회하는 동안에도 홈을 유지한다(스피너 깜빡임/리마운트 방지).
+  const usedCache = useRef<string | null>(null);
 
   if (!userId) return { step: 'login', pendingInvite: null, error: false, offline: false, retry };
+
+  if (!q.data) {
+    const unreachable =
+      q.fetchStatus === 'paused' ||
+      (q.isError && q.fetchStatus === 'idle' && isNetworkError(q.error)) ||
+      (usedCache.current === userId && q.fetchStatus === 'fetching');
+    if (unreachable) {
+      if (flag?.userId !== userId) {
+        // 표시를 읽는 중: 오프라인 화면을 잠깐 보여 주지 않도록 로딩으로 둔다.
+        return { step: null, pendingInvite: null, error: false, offline: false, retry };
+      }
+      if (flag.ok && (families?.length ?? 0) > 0) {
+        usedCache.current = userId;
+        return { step: 'ready', pendingInvite: null, error: false, offline: false, retry };
+      }
+    }
+  }
+
   // 이미 확인한 상태가 있으면 백그라운드 재조회 실패로 앱을 오류 화면으로 바꾸지 않는다.
   if (q.isError && !q.data) {
     return { step: null, pendingInvite: null, error: true, offline: false, retry };

@@ -14,8 +14,12 @@ export type GroupErrorCode =
   | 'network';
 
 export class GroupError extends Error {
-  constructor(public code: GroupErrorCode) {
-    super(code);
+  /** cause: 원래 오류(연결 문제인지 구분할 때 쓴다). */
+  constructor(
+    public code: GroupErrorCode,
+    cause?: unknown
+  ) {
+    super(code, cause === undefined ? undefined : { cause });
     this.name = 'GroupError';
   }
 }
@@ -39,10 +43,10 @@ function toGroupError(e: unknown): GroupError {
   const message = (e as { message?: unknown } | null)?.message;
   if (typeof message === 'string') {
     for (const [needle, code] of Object.entries(MESSAGE_CODES)) {
-      if (message.includes(needle)) return new GroupError(code);
+      if (message.includes(needle)) return new GroupError(code, e);
     }
   }
-  return new GroupError('network');
+  return new GroupError('network', e);
 }
 
 async function rpcData<T>(call: PromiseLike<{ data: T | null; error: unknown }>): Promise<T | null> {

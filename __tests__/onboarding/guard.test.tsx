@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 import { StrictMode, type ReactElement } from 'react';
@@ -5,14 +6,22 @@ import AppLayout from '@/app/(app)/_layout';
 import { createFamily, fetchMyFamilies } from '@/src/groups/group-api';
 import { getPendingInvite } from '@/src/onboarding/pending-invite';
 import { hasProfile } from '@/src/onboarding/profile-api';
+import { isOnboarded, markOnboarded } from '@/src/onboarding/onboarded-flag';
 import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';
 import { qk } from '@/src/lib/query-keys';
 
+let mockStackMounts = 0;
 jest.mock('expo-router', () => {
   const { Text } = require('react-native');
+  const { useEffect } = require('react');
   return {
     Redirect: ({ href }: { href: unknown }) => <Text>redirect:{JSON.stringify(href)}</Text>,
-    Stack: () => <Text>READY</Text>,
+    Stack: () => {
+      useEffect(() => {
+        mockStackMounts++;
+      }, []);
+      return <Text>READY</Text>;
+    },
   };
 });
 jest.mock('@/src/auth/AuthProvider', () => ({
@@ -38,9 +47,11 @@ let client: QueryClient;
 const renderWithClient = (ui: ReactElement) =>
   render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 
-beforeEach(() => {
+beforeEach(async () => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   jest.clearAllMocks();
+  mockStackMounts = 0;
+  await AsyncStorage.clear();
   (createFamily as jest.Mock).mockResolvedValue('f1');
 });
 afterEach(() => {
@@ -145,4 +156,81 @@ it('shows an offline message instead of a spinner when the first check is paused
   onlineManager.setOnline(false);
   await renderWithClient(<AppLayout />);
   expect(await screen.findByText('오프라인이라 확인할 수 없어요')).toBeTruthy();
+});
+
+describe('offline cold start (R1)', () => {
+  const family = { id: 'f1', name: '내 장보기', created_at: '2026-01-01T00:00:00Z' };
+
+  it('renders the app from the persisted families cache when this user finished onboarding', async () => {
+    set(true, null, 1);
+    client.setQueryData(qk.families(), [family]);
+    await markOnboarded('u1');
+    onlineManager.setOnline(false);
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('READY')).toBeTruthy();
+    expect(screen.queryByText('오프라인이라 확인할 수 없어요')).toBeNull();
+  });
+
+  it('keeps the same screen (no remount) when the connection returns', async () => {
+    set(true, null, 1);
+    client.setQueryData(qk.families(), [family]);
+    await markOnboarded('u1');
+    onlineManager.setOnline(false);
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('READY')).toBeTruthy();
+    await act(async () => onlineManager.setOnline(true));
+    await waitFor(() => expect(client.getQueryData(qk.onboarding('u1'))).toBeDefined());
+    expect(screen.getByText('READY')).toBeTruthy();
+    expect(mockStackMounts).toBe(1);
+  });
+
+  it('renders the app when the first check fails with a network error', async () => {
+    set(true, null, 1);
+    (hasProfile as jest.Mock).mockRejectedValue(new TypeError('Network request failed'));
+    client.setQueryData(qk.families(), [family]);
+    await markOnboarded('u1');
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('READY')).toBeTruthy();
+  });
+
+  it('still shows the error screen for a non-network failure', async () => {
+    set(true, null, 1);
+    (hasProfile as jest.Mock).mockRejectedValue({ code: '42501', message: 'permission denied' });
+    client.setQueryData(qk.families(), [family]);
+    await markOnboarded('u1');
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('연결을 확인해 주세요')).toBeTruthy();
+  });
+
+  it('shows the offline screen without the onboarded flag', async () => {
+    set(true, null, 1);
+    client.setQueryData(qk.families(), [family]);
+    onlineManager.setOnline(false);
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('오프라인이라 확인할 수 없어요')).toBeTruthy();
+  });
+
+  it("ignores another user's onboarded flag", async () => {
+    set(true, null, 1);
+    client.setQueryData(qk.families(), [family]);
+    await markOnboarded('someone-else');
+    onlineManager.setOnline(false);
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('오프라인이라 확인할 수 없어요')).toBeTruthy();
+  });
+
+  it('shows the offline screen when the families cache is empty', async () => {
+    set(true, null, 1);
+    await markOnboarded('u1');
+    onlineManager.setOnline(false);
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('오프라인이라 확인할 수 없어요')).toBeTruthy();
+  });
+
+  it('records the onboarded flag once the user is ready', async () => {
+    set(true, null, 1);
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('READY')).toBeTruthy();
+    await waitFor(async () => expect(await isOnboarded('u1')).toBe(true));
+  });
 });
