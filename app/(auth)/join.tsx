@@ -16,7 +16,7 @@ import { useAuth } from '@/src/auth/AuthProvider';
 import { useCurrentGroupStore } from '@/src/groups/current-group-store';
 import { loadEmptySoloGroups } from '@/src/groups/empty-group-cleanup';
 import { GroupError, joinFamily, leaveFamily, type GroupErrorCode } from '@/src/groups/group-api';
-import { qk } from '@/src/lib/query-keys';
+import { mk, qk } from '@/src/lib/query-keys';
 import { INVITE_CODE_LENGTH, normalizeInviteCode } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
@@ -98,7 +98,9 @@ export default function Join() {
       const joinedId = await joinFamily(normalized);
       setFamilyId(joinedId);
       await clearPendingInvite();
-      const empties = await loadEmptySoloGroups(joinedId);
+      // 오프라인 큐에 쓰기가 남아 있으면 서버에는 아직 비어 보일 수 있으므로 정리를 묻지 않는다.
+      const queued = queryClient.isMutating({ mutationKey: mk.all }) > 0;
+      const empties = queued ? [] : await loadEmptySoloGroups(joinedId);
       if (empties.length) setCleanup(empties);
       else await finish();
     } catch (e) {

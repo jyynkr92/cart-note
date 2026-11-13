@@ -176,6 +176,19 @@ describe('empty solo group cleanup', () => {
     expect(toast.error).toHaveBeenCalledWith('그룹을 삭제하지 못했어요');
   });
 
+  it('skips the prompt while offline writes are still queued (R4)', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
+    await renderJoin();
+    // 대기 중인 쓰기(예: 개인 그룹에 넣은 항목)가 있으면 서버에는 아직 비어 보일 수 있다.
+    const isMutating = jest.spyOn(testClient, 'isMutating').mockReturnValue(1);
+    await fireEvent.changeText(screen.getByPlaceholderText('00000000'), '12345678');
+    await fireEvent.press(screen.getByText('참여'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(isMutating).toHaveBeenCalledWith({ mutationKey: ['m'] });
+    expect(loadEmptySoloGroups).not.toHaveBeenCalled();
+    expect(screen.queryByText("비어 있는 '내 장보기' 그룹을 삭제할까요?")).toBeNull();
+  });
+
   it('prompts once per group, in sequence', async () => {
     (loadEmptySoloGroups as jest.Mock).mockResolvedValue([
       { id: 'a', name: '하나' },

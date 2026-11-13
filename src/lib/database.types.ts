@@ -174,6 +174,9 @@ isOneToOne: false
 "family_item_count":
 { Args: { "p_family_id": string }; Returns: number
                            },
+"family_is_empty":
+{ Args: { "p_family_id": string }; Returns: boolean
+                           },
 "gen_invite_code":
 { Args: Record<PropertyKey, never>; Returns: string
                            },

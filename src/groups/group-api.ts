@@ -104,6 +104,7 @@ export async function fetchFamilyMembers(id: string): Promise<FamilyMember[]> {
   return members.map((m) => ({ ...m, display_name: names.get(m.user_id) ?? null }));
 }
 
-export async function familyItemCount(id: string): Promise<number> {
-  return required(await rpcData(supabase.rpc('family_item_count', { p_family_id: id })));
+/** 멤버가 나 혼자이고 항목·추가 목록·지점이 하나도 없으면 true(참여 후 정리 후보). */
+export async function familyIsEmpty(id: string): Promise<boolean> {
+  return required(await rpcData(supabase.rpc('family_is_empty', { p_family_id: id })));
 }
