@@ -14,6 +14,12 @@ export const MAX_LENGTH = {
   address: 300,
 } as const;
 
+/** 문자(코드 포인트) 단위로 자른다. DB char_length와 같은 단위라 이모지가 반쪽(서로게이트)으로 잘리지 않는다. */
+export function truncateCodePoints(s: string, max: number): string {
+  const chars = Array.from(s);
+  return chars.length <= max ? s : chars.slice(0, max).join('');
+}
+
 /** 초대 코드 자릿수(보안 점검 /cso 반영으로 6 → 8). */
 export const INVITE_CODE_LENGTH = 8;
 

@@ -104,6 +104,19 @@ describe('insertLocation', () => {
     expect(upsert.mock.calls[0][0].address).toHaveLength(300);
   });
 
+  it('truncates by code points so an emoji at the boundary is kept whole (B6)', async () => {
+    const upsert = jest.fn().mockResolvedValue({ error: null });
+    from.mockReturnValue({ upsert });
+    await insertLocation({
+      ...row,
+      place: { ...place, place_name: '가'.repeat(199) + '😀' + 'x', address: '😀'.repeat(301) },
+    });
+    const sent = upsert.mock.calls[0][0];
+    expect(sent.place_name).toBe('가'.repeat(199) + '😀');
+    expect(Array.from(sent.address as string)).toHaveLength(300);
+    expect(sent.address).toBe('😀'.repeat(300));
+  });
+
   it('treats a unique violation (same place already on the list) as success', async () => {
     from.mockReturnValue({
       upsert: jest.fn().mockResolvedValue({ error: { code: '23505', message: 'dup' } }),
