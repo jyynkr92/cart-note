@@ -1,13 +1,15 @@
 -- 초대 코드 강화(/cso CSO-2): 8자리, 7일 만료, 전역 실패 상한.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(22);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'a@test.dev'),
   ('00000000-0000-0000-0000-0000000000b1', 'b@test.dev'),
   ('00000000-0000-0000-0000-0000000000c1', 'c@test.dev'),
-  ('00000000-0000-0000-0000-0000000000d1', 'd@test.dev');
+  ('00000000-0000-0000-0000-0000000000d1', 'd@test.dev'),
+  ('00000000-0000-0000-0000-0000000000e1', 'e@test.dev'),
+  ('00000000-0000-0000-0000-0000000000f1', 'f@test.dev');
 
 -- 형식: 8자리만 허용
 select throws_ok(
@@ -57,7 +59,7 @@ select ok(
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select is((select join_family(current_setting('t.newcode'))->>'family_id'), current_setting('t.fid'), 'fresh code joins');
 
--- 전역 실패 상한: 최근 1분 동안 전체 실패 30회 이상이면 누구든 too_many_attempts
+-- 전역 실패 상한: 최근 1분 동안 전체 실패 30회 이상이면, 최근 10분 안에 실패가 있는 사용자는 too_many_attempts
 reset role;
 delete from join_attempts;
 -- 1분보다 오래된 실패는 세지 않는다
@@ -75,10 +77,30 @@ insert into join_attempts (user_id, succeeded)
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select join_family('00000000')->>'error'), 'invalid_code', '29 recent global failures: still allowed (now 30)');
-select throws_ok($$select join_family(current_setting('t.newcode'))$$, 'P0001', 'too_many_attempts', '30 recent global failures: even a valid code is throttled');
+select throws_ok($$select join_family(current_setting('t.newcode'))$$, 'P0001', 'too_many_attempts', 'spike: user with recent failures is throttled even with a valid code');
 reset role;
 select is((select count(*)::int from family_members where family_id = current_setting('t.fid')::uuid and user_id = '00000000-0000-0000-0000-0000000000c1'), 0, 'throttled user not added');
 select is((select count(*)::int from join_attempts where attempted_at > now() - interval '1 minute' and not succeeded), 30, 'global failures stay recorded');
+
+-- 스파이크 중에도 최근 실패가 없는 사용자는 올바른 코드로 참여할 수 있다(전역 상한이 정상 사용자를 막지 않음)
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e1","role":"authenticated"}';
+select is((select join_family(current_setting('t.newcode'))->>'family_id'), current_setting('t.fid'),
+  'spike: clean user with a valid code still joins');
+-- 스파이크 중 최근 실패 1회인 사용자는 막힌다
+reset role;
+insert into join_attempts (user_id, attempted_at, succeeded)
+  values ('00000000-0000-0000-0000-0000000000f1', now() - interval '5 minutes', false);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
+select throws_ok($$select join_family(current_setting('t.newcode'))$$, 'P0001', 'too_many_attempts',
+  'spike: user with one recent failure is throttled');
+-- 스파이크가 없으면 기존과 같다: 최근 실패 1회여도 올바른 코드로 참여
+reset role;
+delete from join_attempts where user_id <> '00000000-0000-0000-0000-0000000000f1';
+set local role authenticated;
+select is((select join_family(current_setting('t.newcode'))->>'family_id'), current_setting('t.fid'),
+  'no spike: user with one recent failure joins with a valid code');
 
 -- 기존 패턴 유지: gen_invite_code는 앱 역할이 실행할 수 없다
 set local role authenticated;
