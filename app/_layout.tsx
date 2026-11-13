@@ -11,18 +11,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { AuthProvider, useAuth } from '@/src/auth/AuthProvider';
+import { reconcileCacheOwner } from '@/src/auth/signed-out-state';
 // 지오펜스 작업 정의는 index.ts 진입점이 먼저 등록한다. 여기서의 import는 중복이어도 무해하다(모듈은 한 번만 평가).
 import '@/src/geofence/geofence-task';
 import {
   setupNotificationHandler,
   useNotificationResponses,
 } from '@/src/geofence/notification-route';
-import {
-  persistOptions,
-  queryClient,
-  setupOnlineManager,
-  syncCacheOwner,
-} from '@/src/lib/query-client';
+import { persistOptions, queryClient, setupOnlineManager } from '@/src/lib/query-client';
 import { ToastHost } from '@/src/lib/toast';
 
 setupOnlineManager();
@@ -33,7 +29,7 @@ export {
   ErrorBoundary,
 } from 'expo-router';
 
-/** 복원이 끝난 뒤, 디스크 캐시 소유자가 현재 사용자와 다르면(또는 로그아웃 상태면) 비운다. */
+/** 복원이 끝난 뒤, 디스크 캐시 소유자가 현재 사용자와 다르면(또는 로그아웃 상태면) 비운다. 로그아웃 상태면 기기 로컬 사용자별 상태도 지운다. */
 function CacheOwnerGuard() {
   const { session, loading } = useAuth();
   const restoring = useIsRestoring();
@@ -41,9 +37,7 @@ function CacheOwnerGuard() {
   useEffect(() => {
     if (restoring || loading) return;
     // 소유자 확인이 끝난 뒤에만 대기 중인 mutation을 재개한다(다른 사용자의 큐가 실행되지 않도록).
-    syncCacheOwner(queryClient, userId)
-      .then(() => queryClient.resumePausedMutations())
-      .catch(() => {});
+    void reconcileCacheOwner(queryClient, userId);
   }, [restoring, loading, userId]);
   return null;
 }

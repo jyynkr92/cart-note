@@ -6,7 +6,7 @@ import {
   setOpenCounts,
   setRegionMeta,
 } from '@/src/geofence/geofence-store';
-import { handleEnter } from '@/src/geofence/handle-enter';
+import { handleEnter, OPEN_COUNT_TIMEOUT_MS } from '@/src/geofence/handle-enter';
 
 const NOW = 1_800_000_000_000;
 const H = 60 * 60 * 1000;
@@ -101,4 +101,56 @@ it('does not record the time when the notification fails', async () => {
   const d = deps({ notify: jest.fn().mockRejectedValue(new Error('denied')) });
   await expect(handleEnter('r1', d)).resolves.toBe('skipped');
   expect(await getLastNotified()).toEqual({});
+});
+
+describe('slow or unauthorized open-count fetch', () => {
+  it('falls back to the cached count when the fetch hangs past the timeout (A9)', async () => {
+    await setOpenCounts({ L1: 4 });
+    const d = deps({ fetchOpenCount: jest.fn(() => new Promise<number>(() => {})), fetchTimeoutMs: 10 });
+    await expect(handleEnter('r1', d)).resolves.toBe('notified');
+    expect(d.notify).toHaveBeenCalledWith(
+      '[부모님댁] 코스트코 양재점 근처예요 · 사야 할 것 4개',
+      expect.anything()
+    );
+  });
+
+  it('uses a 5 second timeout by default (A9)', () => {
+    expect(OPEN_COUNT_TIMEOUT_MS).toBe(5_000);
+  });
+
+  it('skips when the fetch fails with an auth error and the session is gone (R3)', async () => {
+    await setOpenCounts({ L1: 4 });
+    const d = deps({
+      hasSession: jest.fn().mockResolvedValueOnce(true).mockResolvedValue(false),
+      fetchOpenCount: jest.fn().mockRejectedValue({ code: 'PGRST301', message: 'JWT expired' }),
+    });
+    await expect(handleEnter('r1', d)).resolves.toBe('skipped');
+    expect(d.hasSession).toHaveBeenCalledTimes(2);
+    expect(d.notify).not.toHaveBeenCalled();
+  });
+
+  it('skips when the session re-check itself throws after an auth error (R3)', async () => {
+    const d = deps({
+      hasSession: jest.fn().mockResolvedValueOnce(true).mockRejectedValue(new Error('storage')),
+      fetchOpenCount: jest.fn().mockRejectedValue({ status: 401, message: 'unauthorized' }),
+    });
+    await expect(handleEnter('r1', d)).resolves.toBe('skipped');
+    expect(d.notify).not.toHaveBeenCalled();
+  });
+
+  it('still falls back to the cache on an auth error while signed in (R3)', async () => {
+    await setOpenCounts({ L1: 4 });
+    const d = deps({
+      fetchOpenCount: jest.fn().mockRejectedValue({ code: 'PGRST301', message: 'JWT expired' }),
+    });
+    await expect(handleEnter('r1', d)).resolves.toBe('notified');
+    expect(d.hasSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not re-check the session for a plain network failure', async () => {
+    await setOpenCounts({ L1: 4 });
+    const d = deps({ fetchOpenCount: jest.fn().mockRejectedValue(new TypeError('Network request failed')) });
+    await expect(handleEnter('r1', d)).resolves.toBe('notified');
+    expect(d.hasSession).toHaveBeenCalledTimes(1);
+  });
 });
