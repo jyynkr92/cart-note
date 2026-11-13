@@ -2,6 +2,8 @@
 module.exports = {
   preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  // 느린 CI에서 렌더 테스트가 기본 5초에 걸려 실패하지 않게 한다.
+  testTimeout: 15000,
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },
