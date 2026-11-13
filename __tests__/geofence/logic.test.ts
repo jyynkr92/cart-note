@@ -23,6 +23,22 @@ describe('selectRegions', () => {
     expect(selectRegions(locs, null, 3)).toHaveLength(3);
     expect(selectRegions(locs.slice(0, 2), { lat: 0, lng: 0 })).toHaveLength(2);
   });
+
+  it('drops rows with out-of-range or non-finite coordinates or radius (A4)', () => {
+    const ok = { id: 'ok', lat: 37.5, lng: 127, radius_m: 300 };
+    const bad = [
+      { id: 'lat', lat: 91, lng: 127, radius_m: 300 },
+      { id: 'lng', lat: 37.5, lng: -181, radius_m: 300 },
+      { id: 'nan', lat: NaN, lng: 127, radius_m: 300 },
+      { id: 'inf', lat: 37.5, lng: Infinity, radius_m: 300 },
+      { id: 'small', lat: 37.5, lng: 127, radius_m: 10 },
+      { id: 'big', lat: 37.5, lng: 127, radius_m: 100_000 },
+    ];
+    expect(selectRegions([...bad, ok], null).map((l) => l.id)).toEqual(['ok']);
+    expect(selectRegions([...bad, ok], { lat: 37.5, lng: 127 }).map((l) => l.id)).toEqual(['ok']);
+    // 반경이 없으면 기본값(300m)을 쓰므로 유효하다.
+    expect(selectRegions([{ id: 'nul', lat: 1, lng: 1, radius_m: null }], null)).toHaveLength(1);
+  });
 });
 
 describe('canNotify', () => {

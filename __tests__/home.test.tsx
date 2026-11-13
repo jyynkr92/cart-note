@@ -188,6 +188,7 @@ describe('group switcher', () => {
     await fireEvent.press(await screen.findByText('우리집 ▾'));
     await fireEvent.press(await screen.findByText('이름 변경'));
     const input = await screen.findByPlaceholderText('그룹 이름');
+    expect(input.props.maxLength).toBe(50);
     await fireEvent.changeText(input, '   ');
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
     expect(renameFamily).not.toHaveBeenCalled();
@@ -216,6 +217,7 @@ describe('add list', () => {
     await renderWithClient(<Home />);
     await fireEvent.press(await screen.findByText('+ 목록 추가'));
     const input = await screen.findByPlaceholderText('목록 이름');
+    expect(input.props.maxLength).toBe(50);
     await fireEvent.changeText(input, '   ');
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
     expect(insertList).not.toHaveBeenCalled();

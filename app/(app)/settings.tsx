@@ -22,7 +22,7 @@ import { useGroupNameDialog } from '@/src/groups/GroupNameDialog';
 import { inviteExpiry } from '@/src/groups/invite-expiry';
 import { useCurrentGroup, useFamilyMembers } from '@/src/groups/use-groups';
 import { mk, qk } from '@/src/lib/query-keys';
-import { normalizeName } from '@/src/lib/text';
+import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
 import { useTopInset } from '@/src/lib/use-top-inset';
 import { clearPendingInvite } from '@/src/onboarding/pending-invite';
@@ -314,7 +314,13 @@ export default function Settings() {
           <DialogHeader>
             <DialogTitle>내 이름 변경</DialogTitle>
           </DialogHeader>
-          <Input placeholder="이름" value={name} onChangeText={setName} autoFocus />
+          <Input
+            placeholder="이름"
+            value={name}
+            onChangeText={setName}
+            maxLength={MAX_LENGTH.displayName}
+            autoFocus
+          />
           <DialogFooter>
             <Button onPress={() => void saveName()} disabled={!trimmed || busy}>
               <Text>저장</Text>

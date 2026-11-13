@@ -15,7 +15,7 @@ import {
 } from './geofence-store';
 import { GEOFENCE_TASK } from './geofence-task';
 import { hasBackgroundLocationPermission } from './permissions';
-import { selectRegions, type Point } from './select-regions';
+import { isValidRegion, selectRegions, type Point } from './select-regions';
 
 export const DEFAULT_RADIUS_M = 300;
 export const MAX_REGIONS = 20;
@@ -93,7 +93,7 @@ async function run(opts: SyncOptions): Promise<void> {
 
   let locs: MyLocation[];
   try {
-    locs = opts.locations ?? (await fetchAllMyLocations());
+    locs = (opts.locations ?? (await fetchAllMyLocations())).filter(isValidRegion);
   } catch {
     return; // 오프라인 등: 기존 등록을 유지한다.
   }

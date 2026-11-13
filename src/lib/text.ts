@@ -3,6 +3,17 @@ export function normalizeName(s: string): string | null {
   return t === '' ? null : t;
 }
 
+/** 텍스트 최대 길이(문자 수). DB CHECK(0008_constraints.sql)와 같은 값이다. */
+export const MAX_LENGTH = {
+  displayName: 50,
+  groupName: 50,
+  listName: 50,
+  itemName: 200,
+  itemNote: 1000,
+  placeName: 200,
+  address: 300,
+} as const;
+
 /** 초대 코드 자릿수(보안 점검 /cso 반영으로 6 → 8). */
 export const INVITE_CODE_LENGTH = 8;
 

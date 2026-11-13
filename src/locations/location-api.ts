@@ -1,5 +1,6 @@
 import { supabase } from '@/src/lib/supabase';
 import type { Database } from '@/src/lib/database.types';
+import { MAX_LENGTH } from '@/src/lib/text';
 import { SearchRateLimitedError } from './search-errors';
 
 export type ListLocation = Database['public']['Tables']['list_locations']['Row'];
@@ -72,8 +73,9 @@ export async function insertLocation(row: {
       id: row.id,
       list_id: row.listId,
       family_id: row.familyId,
-      place_name: row.place.place_name,
-      address: row.place.address,
+      // 외부(카카오) 값이라 DB 길이 제한(0008)을 넘지 않게 자른다. 넘으면 삽입이 계속 실패한다.
+      place_name: row.place.place_name.slice(0, MAX_LENGTH.placeName),
+      address: row.place.address.slice(0, MAX_LENGTH.address),
       lat: row.place.lat,
       lng: row.place.lng,
       kakao_place_id: row.place.kakao_place_id,

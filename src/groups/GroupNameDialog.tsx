@@ -11,7 +11,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { qk } from '@/src/lib/query-keys';
-import { normalizeName } from '@/src/lib/text';
+import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
 import { useCurrentGroupStore } from './current-group-store';
 import { createFamily, type Family } from './group-api';
@@ -70,7 +70,13 @@ export function useGroupNameDialog(family: Family | null): {
         <DialogHeader>
           <DialogTitle>{mode === 'rename' ? '그룹 이름 변경' : '새 그룹'}</DialogTitle>
         </DialogHeader>
-        <Input placeholder="그룹 이름" value={name} onChangeText={setName} autoFocus />
+        <Input
+          placeholder="그룹 이름"
+          value={name}
+          onChangeText={setName}
+          maxLength={MAX_LENGTH.groupName}
+          autoFocus
+        />
         <DialogFooter>
           <Button onPress={() => void save()} disabled={!trimmed || busy}>
             <Text>저장</Text>

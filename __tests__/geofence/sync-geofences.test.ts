@@ -114,6 +114,13 @@ it('defaults the radius to 300 when missing', async () => {
   expect(L.startGeofencingAsync.mock.calls[0][1]![0].radius).toBe(300);
 });
 
+it('never registers a region with invalid coordinates (A4)', async () => {
+  await setEnabled(true);
+  await syncGeofences({ locations: [loc(1, { lat: NaN }), loc(2, { radius_m: 0 }), loc(3)] });
+  expect(L.startGeofencingAsync.mock.calls[0][1]!.map((r) => r.identifier)).toEqual(['r3']);
+  expect(Object.keys(await getRegionMeta())).toEqual(['r3']);
+});
+
 it('stops instead of starting with an empty list', async () => {
   await setEnabled(true);
   await setRegionMeta({ old: { listId: 'x', familyId: 'y', groupName: 'g', placeName: 'p' } });

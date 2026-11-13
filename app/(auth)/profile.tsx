@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { qk } from '@/src/lib/query-keys';
-import { normalizeName } from '@/src/lib/text';
+import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
 import { createProfile } from '@/src/onboarding/profile-api';
 
 export default function Profile() {
@@ -44,7 +44,7 @@ export default function Profile() {
   return (
     <View className="flex-1 justify-center gap-4 bg-background px-6">
       <Text className="text-2xl font-bold">이름을 알려 주세요</Text>
-      <Input placeholder="이름" value={name} onChangeText={setName} maxLength={30} />
+      <Input placeholder="이름" value={name} onChangeText={setName} maxLength={MAX_LENGTH.displayName} />
       <Button onPress={submit} disabled={!normalized || busy}>
         <Text>시작하기</Text>
       </Button>

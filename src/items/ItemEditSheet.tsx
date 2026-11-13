@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
-import { normalizeName } from '@/src/lib/text';
+import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
 import type { Item } from './item-api';
 
 type Props = {
@@ -37,8 +37,19 @@ function EditForm({ item, onSave }: { item: Item; onSave: Props['onSave'] }) {
       <DialogHeader>
         <DialogTitle>항목 편집</DialogTitle>
       </DialogHeader>
-      <Input placeholder="항목 이름" value={name} onChangeText={setName} autoFocus />
-      <Input placeholder="메모" value={note} onChangeText={setNote} />
+      <Input
+        placeholder="항목 이름"
+        value={name}
+        onChangeText={setName}
+        maxLength={MAX_LENGTH.itemName}
+        autoFocus
+      />
+      <Input
+        placeholder="메모"
+        value={note}
+        onChangeText={setNote}
+        maxLength={MAX_LENGTH.itemNote}
+      />
       <DialogFooter>
         <Button
           disabled={!trimmed}

@@ -20,7 +20,7 @@ import { useCurrentGroup, useFamilyMembers } from '@/src/groups/use-groups';
 import { ListCard, sortLists } from '@/src/lists/ListCard';
 import { useCreateList, useLists } from '@/src/lists/use-lists';
 import { qk } from '@/src/lib/query-keys';
-import { normalizeName } from '@/src/lib/text';
+import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
 import { useTopInset } from '@/src/lib/use-top-inset';
 
 type NewKind = 'store' | 'online';
@@ -137,7 +137,13 @@ export default function Home() {
           <DialogHeader>
             <DialogTitle>목록 추가</DialogTitle>
           </DialogHeader>
-          <Input placeholder="목록 이름" value={name} onChangeText={setName} autoFocus />
+          <Input
+            placeholder="목록 이름"
+            value={name}
+            onChangeText={setName}
+            maxLength={MAX_LENGTH.listName}
+            autoFocus
+          />
           <View className="flex-row gap-2">
             <Button
               variant={kind === 'store' ? 'default' : 'outline'}

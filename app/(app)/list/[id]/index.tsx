@@ -35,7 +35,7 @@ import {
   useToggleItem,
   useUpdateItem,
 } from '@/src/items/use-items';
-import { normalizeName } from '@/src/lib/text';
+import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
 import { useSelection } from '@/src/items/use-selection';
 import { useTopInset } from '@/src/lib/use-top-inset';
 import { useDeleteList, useLists, useRenameList } from '@/src/lists/use-lists';
@@ -265,6 +265,7 @@ export default function ListDetail() {
         value={text}
         onChangeText={setText}
         onSubmitEditing={submit}
+        maxLength={MAX_LENGTH.itemName}
         // 'submit'이면 제출 후에도 키보드/포커스가 유지돼 연속으로 입력할 수 있다.
         submitBehavior="submit"
         returnKeyType="done"
@@ -357,7 +358,13 @@ export default function ListDetail() {
           <DialogHeader>
             <DialogTitle>목록 이름 변경</DialogTitle>
           </DialogHeader>
-          <Input placeholder="목록 이름" value={listName} onChangeText={setListName} autoFocus />
+          <Input
+            placeholder="목록 이름"
+            value={listName}
+            onChangeText={setListName}
+            maxLength={MAX_LENGTH.listName}
+            autoFocus
+          />
           <DialogFooter>
             <Button onPress={saveRename} disabled={!renameTrimmed}>
               <Text>저장</Text>

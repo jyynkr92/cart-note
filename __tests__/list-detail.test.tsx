@@ -134,6 +134,8 @@ describe('add item', () => {
     );
     expect(screen.getByPlaceholderText('항목 추가').props.value).toBe('');
     expect(screen.getByPlaceholderText('항목 추가').props.submitBehavior).toBe('submit');
+    // DB CHECK(0008)와 같은 길이 제한(A13)
+    expect(screen.getByPlaceholderText('항목 추가').props.maxLength).toBe(200);
   });
 
   it('ignores a whitespace-only entry', async () => {
@@ -183,6 +185,8 @@ describe('items', () => {
     await fireEvent.press(await screen.findByText('우유'));
     const name = await screen.findByPlaceholderText('항목 이름');
     expect(name.props.value).toBe('우유');
+    expect(name.props.maxLength).toBe(200);
+    expect(screen.getByPlaceholderText('메모').props.maxLength).toBe(1000);
     await fireEvent.changeText(name, ' 두유 ');
     await fireEvent.changeText(screen.getByPlaceholderText('메모'), ' 무가당 ');
     await fireEvent.press(screen.getByRole('button', { name: '저장' }));
@@ -309,6 +313,7 @@ describe('menu', () => {
     await fireEvent.press(await screen.findByText('이름 변경'));
     const input = await screen.findByPlaceholderText('목록 이름');
     expect(input.props.value).toBe('이마트');
+    expect(input.props.maxLength).toBe(50);
     await fireEvent.changeText(input, '   ');
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
     expect(renameList).not.toHaveBeenCalled();

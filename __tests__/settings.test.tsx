@@ -307,6 +307,7 @@ describe('changing my name', () => {
 
   it('blocks a whitespace-only name', async () => {
     const input = await open();
+    expect(input.props.maxLength).toBe(50);
     await fireEvent.changeText(input, '   ');
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
     expect(updateDisplayName).not.toHaveBeenCalled();

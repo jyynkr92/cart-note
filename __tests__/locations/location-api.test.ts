@@ -93,6 +93,17 @@ describe('insertLocation', () => {
     );
   });
 
+  it('truncates place_name and address to the DB limits (A13)', async () => {
+    const upsert = jest.fn().mockResolvedValue({ error: null });
+    from.mockReturnValue({ upsert });
+    await insertLocation({
+      ...row,
+      place: { ...place, place_name: '가'.repeat(250), address: '나'.repeat(350) },
+    });
+    expect(upsert.mock.calls[0][0].place_name).toHaveLength(200);
+    expect(upsert.mock.calls[0][0].address).toHaveLength(300);
+  });
+
   it('treats a unique violation (same place already on the list) as success', async () => {
     from.mockReturnValue({
       upsert: jest.fn().mockResolvedValue({ error: { code: '23505', message: 'dup' } }),
