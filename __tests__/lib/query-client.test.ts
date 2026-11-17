@@ -125,6 +125,15 @@ describe('offline queue (Review Focus 5)', () => {
 });
 
 describe('persisted queue lifetime (A1)', () => {
+  // persistQueryClientRestore는 저장 시각이 maxAge(생략 시 24시간)보다 오래되면 항목별로 거르지 않고
+  // removeClient로 영속 캐시를 통째로 버린다. 그러면 mutation gcTime이 아무리 길어도 오프라인 큐가 함께 사라진다.
+  it('keeps persistOptions.maxAge at least as long as the mutation gcTime', () => {
+    const mutationGcTime = createQueryClient().getDefaultOptions().mutations?.gcTime;
+    expect(typeof mutationGcTime).toBe('number');
+    expect(typeof persistOptions.maxAge).toBe('number');
+    expect(persistOptions.maxAge).toBeGreaterThanOrEqual(mutationGcTime as number);
+  });
+
   it('restores and resumes a paused mutation saved two days ago', async () => {
     onlineManager.setOnline(false);
     const first = createQueryClient();
