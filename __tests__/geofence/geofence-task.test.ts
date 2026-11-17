@@ -32,7 +32,7 @@ const storedSession = (over: Record<string, unknown> = {}) =>
       access_token: 'expired',
       refresh_token: 'r1',
       expires_at: 1,
-      user: { id: 'u1' },
+      user: { id: '6f1c2a9e-1b2c-4d3e-8f40-0a1b2c3d4e5f' },
       ...over,
     })
   );
@@ -86,6 +86,14 @@ describe('onGeofenceEvent', () => {
     await storedSession({ refresh_token: '' });
     await onGeofenceEvent(body(Location.GeofencingEventType.Enter));
     await AsyncStorage.setItem(AUTH_KEY, '{not json');
+    await onGeofenceEvent(body(Location.GeofencingEventType.Enter));
+    expect(schedule).not.toHaveBeenCalled();
+  });
+
+  it('skips a stored session whose user id is not a uuid (F5)', async () => {
+    await storedSession({ user: { id: 'u1' } });
+    await onGeofenceEvent(body(Location.GeofencingEventType.Enter));
+    await storedSession({ user: null });
     await onGeofenceEvent(body(Location.GeofencingEventType.Enter));
     expect(schedule).not.toHaveBeenCalled();
   });

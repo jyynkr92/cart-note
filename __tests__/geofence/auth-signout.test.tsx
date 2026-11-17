@@ -88,7 +88,7 @@ describe('offline cold start with an expired token (B1)', () => {
   const storeSession = () =>
     AsyncStorage.setItem(
       'test-auth',
-      JSON.stringify({ access_token: 'expired', refresh_token: 'r1', user: { id: 'u1' } })
+      JSON.stringify({ access_token: 'expired', refresh_token: 'r1', user: { id: '6f1c2a9e-1b2c-4d3e-8f40-0a1b2c3d4e5f' } })
     );
 
   it('exposes the stored user id when INITIAL_SESSION is null but a refresh token is stored', async () => {
@@ -99,7 +99,7 @@ describe('offline cold start with an expired token (B1)', () => {
       </AuthProvider>
     );
     await act(async () => emit('INITIAL_SESSION', null));
-    expect(await screen.findByText('loading=false session=false offline=u1')).toBeTruthy();
+    expect(await screen.findByText('loading=false session=false offline=6f1c2a9e-1b2c-4d3e-8f40-0a1b2c3d4e5f')).toBeTruthy();
     expect(clearUserCache).not.toHaveBeenCalled();
     expect(resetGeofencing).not.toHaveBeenCalled();
   });
@@ -122,7 +122,7 @@ describe('offline cold start with an expired token (B1)', () => {
       </AuthProvider>
     );
     await act(async () => emit('INITIAL_SESSION', null));
-    await screen.findByText('loading=false session=false offline=u1');
+    await screen.findByText('loading=false session=false offline=6f1c2a9e-1b2c-4d3e-8f40-0a1b2c3d4e5f');
     await act(async () => emit('TOKEN_REFRESHED', { user: { id: 'u1' } }));
     expect(screen.getByText('loading=false session=true offline=null')).toBeTruthy();
     await act(async () => emit('SIGNED_OUT', null));

@@ -61,7 +61,7 @@ describe('null session with a stored refresh token (B1)', () => {
   const storeSession = (over: Record<string, unknown> = {}) =>
     AsyncStorage.setItem(
       'test-auth',
-      JSON.stringify({ access_token: 'expired', refresh_token: 'r1', user: { id: 'u1' }, ...over })
+      JSON.stringify({ access_token: 'expired', refresh_token: 'r1', user: { id: '6f1c2a9e-1b2c-4d3e-8f40-0a1b2c3d4e5f' }, ...over })
     );
 
   it('keeps the cache, queue and device state and does not resume', async () => {
