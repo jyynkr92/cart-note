@@ -83,7 +83,8 @@ jest.mock('expo-notifications', () => ({
   clearLastNotificationResponse: jest.fn(),
 }));
 
-// 세션 게이트는 기본이 "세션 없음"(fail closed)이다. 테스트에서는 어떤 사용자와도 일치하는 세션으로 둔다
-// (세션 게이트 동작은 __tests__/lib/session-gate.test.ts가 직접 설치해 검증한다).
-import { ANY_USER_SESSION, installSessionCheck } from '@/src/lib/session-gate';
-installSessionCheck(async () => ANY_USER_SESSION);
+// 세션 게이트는 기본이 "세션 없음"(fail closed)이다. 테스트에서는 테스트 사용자로 게이트를 열고, 세션 확인은
+// 게이트를 연 사용자를 돌려준다(세션 게이트 동작은 __tests__/lib/session-gate.test.ts가 직접 설치해 검증한다).
+import { getVerifiedUserId, installSessionCheck, openSession } from '@/src/lib/session-gate';
+openSession('jest-user');
+installSessionCheck(async () => getVerifiedUserId());

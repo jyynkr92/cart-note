@@ -8,7 +8,9 @@ afterEach(() => {
 it('is reachable on any HTTP response, unreachable when fetch throws (I-2)', async () => {
   globalThis.fetch = jest.fn().mockResolvedValue(new Response('{}', { status: 401 })) as never;
   await expect(probeBackend('http://x', 'k')).resolves.toBe(true);
-  expect((globalThis.fetch as jest.Mock).mock.calls[0][0]).toBe('http://x/auth/v1/health');
+  // 쓰기가 가는 PostgREST에 닿는지 본다(N-4).
+  expect((globalThis.fetch as jest.Mock).mock.calls[0][0]).toBe('http://x/rest/v1/');
+  expect((globalThis.fetch as jest.Mock).mock.calls[0][1].headers).toEqual({ apikey: 'k' });
   globalThis.fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed')) as never;
   await expect(probeBackend('http://x', 'k')).resolves.toBe(false);
 });

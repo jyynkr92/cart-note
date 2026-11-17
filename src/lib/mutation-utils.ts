@@ -6,6 +6,7 @@ import {
   hasLiveSession,
   markBackendUnreachable,
   markSessionUnavailable,
+  noteQueuedRequestSucceeded,
   SessionUnavailableError,
 } from './session-gate';
 
@@ -27,6 +28,7 @@ export function sessionGuarded<V>(run: (v: V) => Promise<void>): (v: V) => Promi
     }
     try {
       await run(v);
+      noteQueuedRequestSucceeded();
     } catch (e) {
       // 요청 도중 연결이 끊겼다: 게이트를 닫아 재시도 정책이 곧바로 pause(영속화)하게 한다.
       if (e instanceof RetryableNetworkError) markBackendUnreachable();

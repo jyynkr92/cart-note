@@ -23,9 +23,6 @@ let network: boolean | null = null; // null = 아직 모름(NetInfo 연결 전, 
 let reachable = true;
 let ready = false;
 let verifiedUserId: string | null = null;
-/** 테스트용: 어떤 확인된 사용자와도 일치하는 세션(jest.setup이 설치). 앱 코드는 쓰지 않는다. */
-export const ANY_USER_SESSION = '*any-user*';
-
 // 기본값은 "세션 없음"(fail closed). 앱은 app/_layout에서 getSession 기반 확인을 설치한다.
 const noSession = async (): Promise<string | null> => null;
 let check: () => Promise<string | null> = noSession;
@@ -49,8 +46,9 @@ export function installReachabilityProbe(fn: () => Promise<boolean>): void {
   reachabilityProbe = fn;
 }
 
+// 로그인한(확인된) 사용자가 있을 때만 재탐지한다. 로그아웃 상태에서는 다음 로그인(openSession)이 바로 확인한다.
 function needsProbe(): boolean {
-  return !reachable || (!ready && verifiedUserId !== null);
+  return verifiedUserId !== null && (!reachable || !ready);
 }
 
 function cancelProbe() {
@@ -86,8 +84,19 @@ export async function reprobeNow(): Promise<void> {
     probing = false;
   }
   apply();
+  // 탐지 성공만으로는 백오프를 되돌리지 않는다(health는 되는데 쓰기가 계속 실패하는 경우 간격이 늘어나야 한다).
+  // 실제 큐 요청이 성공하면(noteQueuedRequestSucceeded) 되돌린다.
   if (needsProbe()) scheduleProbe();
-  else attempt = 0;
+}
+
+/** 큐 요청이 실제로 성공했다: 재탐지 백오프를 처음으로 되돌린다. */
+export function noteQueuedRequestSucceeded(): void {
+  attempt = 0;
+}
+
+/** 테스트용: 다음 재탐지 간격 단계. */
+export function getReprobeAttemptForTests(): number {
+  return attempt;
 }
 
 /** 실제 세션 확인(세션 사용자 id, 없으면 null). 앱 시작 시 supabase.auth.getSession 기반으로 설치한다. */
@@ -106,7 +115,12 @@ export async function hasLiveSession(): Promise<boolean> {
   } catch {
     return false;
   }
-  return uid !== null && (uid === ANY_USER_SESSION || uid === verifiedUserId);
+  return uid !== null && uid === verifiedUserId;
+}
+
+/** 게이트를 연(소유자 확인된) 사용자. 닫혀 있으면 null. */
+export function getVerifiedUserId(): string | null {
+  return verifiedUserId;
 }
 
 export function setNetworkOnline(v: boolean): void {
@@ -135,7 +149,10 @@ export function subscribeNetwork(l: () => void): () => void {
 export function openSession(userId: string): void {
   verifiedUserId = userId;
   ready = true;
+  attempt = 0;
   apply();
+  // 로그아웃 전에 서버에 닿지 않는다고 표시돼 있었으면 새 백오프로 바로 다시 확인한다.
+  if (!reachable) void reprobeNow();
 }
 
 /** 로그아웃/세션 없음: 게이트를 닫고 확인된 사용자도 잊는다. */
@@ -143,7 +160,9 @@ export function closeSession(): void {
   verifiedUserId = null;
   ready = false;
   apply();
-  if (!needsProbe()) cancelProbe();
+  // 로그아웃: 서버 연결 여부와 관계없이 재탐지를 멈춘다(다음 로그인이 다시 시작한다).
+  cancelProbe();
+  attempt = 0;
 }
 
 /**

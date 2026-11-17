@@ -10,6 +10,8 @@ import { qk } from '@/src/lib/query-keys';
 import { dehydrate } from '@tanstack/react-query';
 import {
   closeSession,
+  getReprobeAttemptForTests,
+  getVerifiedUserId,
   hasLiveSession,
   installReachabilityProbe,
   markBackendUnreachable,
@@ -308,5 +310,89 @@ describe('re-probe schedule (I-2, M-3)', () => {
     closeSession();
     await jest.advanceTimersByTimeAsync(60_000);
     expect(probe).not.toHaveBeenCalled();
+  });
+});
+
+describe('probe loop lifecycle (N-2)', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('sign-out stops the probe loop even while the backend is unreachable', async () => {
+    const probe = jest.fn(async () => false);
+    installReachabilityProbe(probe);
+    openSession('u1');
+    setNetworkOnline(true);
+    markBackendUnreachable();
+    closeSession();
+    await jest.advanceTimersByTimeAsync(120_000);
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('signing in while unreachable probes right away with a fresh backoff', async () => {
+    const probe = jest.fn(async () => false);
+    installReachabilityProbe(probe);
+    openSession('u1');
+    setNetworkOnline(true);
+    markBackendUnreachable();
+    await jest.advanceTimersByTimeAsync(5_000); // attempt 1 → 다음은 10초
+    closeSession();
+    probe.mockClear();
+    probe.mockResolvedValue(true);
+    openSession('u2');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(onlineManager.isOnline()).toBe(true);
+    expect(getReprobeAttemptForTests()).toBe(0);
+  });
+});
+
+describe('backoff resets only on a real request success (N-4)', () => {
+  it('grows while the health probe succeeds but writes keep failing', async () => {
+    jest.useFakeTimers();
+    try {
+      const probe = jest.fn(async () => true);
+      installReachabilityProbe(probe);
+      openSession('u1');
+      setNetworkOnline(true);
+      markBackendUnreachable();
+      await jest.advanceTimersByTimeAsync(5_000);
+      expect(probe).toHaveBeenCalledTimes(1);
+      expect(onlineManager.isOnline()).toBe(true);
+      // 다시 쓰기가 연결 오류로 실패한다 → 이번에는 10초 뒤에 확인한다.
+      markBackendUnreachable();
+      await jest.advanceTimersByTimeAsync(9_999);
+      expect(probe).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(probe).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a successful queued request resets the backoff', async () => {
+    installReachabilityProbe(async () => true);
+    openSession('u1');
+    setNetworkOnline(true);
+    session = true;
+    markBackendUnreachable();
+    await act(async () => reprobeNow());
+    markBackendUnreachable();
+    await act(async () => reprobeNow());
+    expect(getReprobeAttemptForTests()).toBe(2);
+    await deleteA();
+    await waitFor(() => expect(mutation().state.status).toBe('success'));
+    expect(getReprobeAttemptForTests()).toBe(0);
+  });
+});
+
+describe('verified user check for jest (N-3)', () => {
+  it('a check that returns the verified user only passes while the gate is open for them', async () => {
+    installSessionCheck(async () => getVerifiedUserId());
+    await expect(hasLiveSession()).resolves.toBe(false);
+    openSession('u1');
+    expect(getVerifiedUserId()).toBe('u1');
+    await expect(hasLiveSession()).resolves.toBe(true);
+    closeSession();
+    await expect(hasLiveSession()).resolves.toBe(false);
   });
 });
