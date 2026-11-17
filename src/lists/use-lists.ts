@@ -1,5 +1,11 @@
 import { useMutation, useQuery, type QueryClient } from '@tanstack/react-query';
-import { invalidateWhenIdle, newId, QUEUE_SCOPE, withPrepare } from '@/src/lib/mutation-utils';
+import {
+  invalidateWhenIdle,
+  newId,
+  QUEUE_SCOPE,
+  sessionGuarded,
+  withPrepare,
+} from '@/src/lib/mutation-utils';
 import { mk, qk } from '@/src/lib/query-keys';
 import { normalizeName } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
@@ -38,7 +44,7 @@ function define<V extends { familyId: string }>(
 ) {
   qc.setMutationDefaults(spec.key, {
     scope: QUEUE_SCOPE,
-    mutationFn: spec.run,
+    mutationFn: sessionGuarded(spec.run),
     onMutate: async (v: V): Promise<Ctx> => {
       const key = qk.lists(v.familyId);
       await qc.cancelQueries({ queryKey: key });

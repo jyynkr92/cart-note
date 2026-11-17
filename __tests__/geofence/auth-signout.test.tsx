@@ -8,6 +8,7 @@ import { clearUserCache } from '@/src/lib/query-client';
 import { clearPendingInvite } from '@/src/onboarding/pending-invite';
 import { clearOnboarded } from '@/src/onboarding/onboarded-flag';
 import { supabase } from '@/src/lib/supabase';
+import { closeSession, sessionRestored } from '@/src/lib/session-gate';
 
 jest.mock('@/src/lib/supabase', () => ({
   AUTH_STORAGE_KEY: 'test-auth',
@@ -32,6 +33,10 @@ jest.mock('@/src/onboarding/pending-invite', () => ({
 }));
 jest.mock('@/src/onboarding/onboarded-flag', () => ({
   clearOnboarded: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('@/src/lib/session-gate', () => ({
+  closeSession: jest.fn(),
+  sessionRestored: jest.fn(),
 }));
 jest.mock('expo-linking', () => ({
   getInitialURL: jest.fn().mockResolvedValue(null),
@@ -122,5 +127,21 @@ describe('offline cold start with an expired token (B1)', () => {
     expect(screen.getByText('loading=false session=true offline=null')).toBeTruthy();
     await act(async () => emit('SIGNED_OUT', null));
     expect(screen.getByText('loading=false session=false offline=null')).toBeTruthy();
+  });
+});
+
+describe('session gate (F2)', () => {
+  it('reopens for a returning session and closes on sign-out', async () => {
+    let emit!: (event: string, session: unknown) => void;
+    (supabase.auth.onAuthStateChange as jest.Mock).mockImplementation((cb) => {
+      emit = cb;
+      return { data: { subscription: { unsubscribe: jest.fn() } } };
+    });
+    await render(<AuthProvider>{null}</AuthProvider>);
+    await act(async () => emit('TOKEN_REFRESHED', { user: { id: 'u1' } }));
+    expect(sessionRestored).toHaveBeenCalledWith('u1');
+    expect(closeSession).not.toHaveBeenCalled();
+    await act(async () => emit('SIGNED_OUT', null));
+    expect(closeSession).toHaveBeenCalledTimes(1);
   });
 });

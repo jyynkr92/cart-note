@@ -11,6 +11,8 @@ import type { PersistQueryClientProviderProps } from '@tanstack/react-query-pers
 import { registerItemMutations } from '@/src/items/use-items';
 import { registerListMutations } from '@/src/lists/use-lists';
 import { registerLocationMutations } from '@/src/locations/use-locations';
+import { queuedRetryDelay, shouldRetryQueued } from './queue-retry';
+import { setNetworkOnline } from './session-gate';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CACHE_KEY = 'cart-note-query-cache';
@@ -22,7 +24,8 @@ export function createQueryClient(): QueryClient {
     defaultOptions: {
       queries: { gcTime: DAY_MS, staleTime: 30_000, retry: 1 },
       // 오프라인 mutation을 재시작 후에도 보존하려면 gc되면 안 된다.
-      mutations: { gcTime: DAY_MS * 7 },
+      // 세션 없음(SessionUnavailableError)은 실패가 아니라 pause로 보낸다(session-gate.ts).
+      mutations: { gcTime: DAY_MS * 7, retry: shouldRetryQueued, retryDelay: queuedRetryDelay },
     },
   });
   registerItemMutations(client);
@@ -53,11 +56,15 @@ export const persistOptions: PersistQueryClientProviderProps['persistOptions'] =
   },
 };
 
-/** NetInfo 연결 상태를 TanStack Query의 onlineManager에 연결한다. */
+/**
+ * NetInfo 연결 상태를 세션 게이트에 연결한다. onlineManager는 게이트가 network && session으로 정한다
+ * (세션 없이 큐가 재생되지 않게). 게이트가 닫힌 채로 시작하고, 소유자 확인 후 열린다.
+ */
 export function setupOnlineManager(): void {
-  onlineManager.setEventListener((setOnline) =>
-    NetInfo.addEventListener((s) => setOnline(!!s.isConnected && s.isInternetReachable !== false))
-  );
+  // 기본 리스너(window online/offline)가 게이트 값을 덮어쓰지 않게 비운다.
+  onlineManager.setEventListener(() => () => {});
+  setNetworkOnline(true);
+  NetInfo.addEventListener((s) => setNetworkOnline(!!s.isConnected && s.isInternetReachable !== false));
 }
 
 /** 로그아웃/계정 전환 시 메모리와 디스크 캐시(오프라인 큐 포함)를 모두 지운다. */

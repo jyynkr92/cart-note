@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { invalidateWhenIdle, newId, QUEUE_SCOPE } from '@/src/lib/mutation-utils';
+import { invalidateWhenIdle, newId, QUEUE_SCOPE, sessionGuarded } from '@/src/lib/mutation-utils';
 import { mk, qk } from '@/src/lib/query-keys';
 import { toast } from '@/src/lib/toast';
 import * as api from './location-api';
@@ -31,7 +31,7 @@ function define<V extends { listId: string; familyId: string }>(
 ) {
   qc.setMutationDefaults(spec.key, {
     scope: QUEUE_SCOPE,
-    mutationFn: spec.run,
+    mutationFn: sessionGuarded(spec.run),
     onMutate: async (v: V): Promise<Ctx> => {
       const key = qk.locations(v.listId);
       await qc.cancelQueries({ queryKey: key });

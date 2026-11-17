@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 import { clearUserCache } from '@/src/lib/query-client';
+import { closeSession, sessionRestored } from '@/src/lib/session-gate';
 import { supabase } from '@/src/lib/supabase';
 import { capturePendingInvite } from '@/src/onboarding/pending-invite';
 import { exchangeCodeFromUrl } from './auth-api';
@@ -54,10 +55,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const mine = ++seq;
       // 같은 기기의 다른 사용자가 이전 캐시(오프라인 큐 포함)를 보지 못하게 로그아웃 시 즉시 비운다.
       if (event === 'SIGNED_OUT') {
+        // 큐가 이전 사용자의 요청을 보내지 않게 게이트부터 닫는다.
+        closeSession();
         void clearUserCache().catch(() => {});
         // 현재 그룹, 지오펜스(이전 사용자의 지점/메타로 계속 돌지 않게), 온보딩 표시를 지운다.
         void clearSignedOutDeviceState();
       }
+      // 이미 소유자 확인을 마친 같은 사용자의 세션이 돌아왔으면(토큰 갱신 성공 등) 게이트를 다시 연다.
+      if (next) sessionRestored(next.user.id);
       if (next || event === 'SIGNED_OUT') {
         setSession(next);
         setOfflineUserId(null);

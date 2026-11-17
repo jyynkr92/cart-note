@@ -1,12 +1,27 @@
 import type { QueryClient, UseMutationResult } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
 import { mk } from './query-keys';
+import { hasLiveSession, markSessionUnavailable, SessionUnavailableError } from './session-gate';
 
 /**
  * 모든 쓰기 mutation이 공유하는 scope. 같은 scope의 mutation은 순서대로 한 번에 하나씩 실행되므로
  * 오프라인에서 쌓인 큐(목록 생성 → 항목 추가 → 이동 → 비우기)가 입력 순서대로 재생된다.
  */
 export const QUEUE_SCOPE = { id: 'cart-note-queue' } as const;
+
+/**
+ * 큐 mutation의 mutationFn을 감싼다: 요청 직전에 실제 세션이 있는지 확인하고, 없으면 게이트를 닫고
+ * SessionUnavailableError를 던진다(재시도 정책이 pause로 보낸다). anon 키로 요청이 나가지 않게 한다.
+ */
+export function sessionGuarded<V>(run: (v: V) => Promise<void>): (v: V) => Promise<void> {
+  return async (v: V) => {
+    if (!(await hasLiveSession())) {
+      markSessionUnavailable();
+      throw new SessionUnavailableError();
+    }
+    await run(v);
+  };
+}
 
 export function newId(): string {
   return randomUUID();

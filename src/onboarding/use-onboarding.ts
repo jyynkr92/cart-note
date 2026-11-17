@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createFamily, fetchMyFamilies } from '@/src/groups/group-api';
 import { useFamilies } from '@/src/groups/use-groups';
 import { isNetworkError } from '@/src/lib/network-error';
+import { useIsOnline } from '@/src/lib/use-online';
 import { qk } from '@/src/lib/query-keys';
 import { clearOnboarded, isOnboarded, markOnboarded } from './onboarded-flag';
 import { getPendingInvite } from './pending-invite';
@@ -79,6 +80,8 @@ export function useOnboarding(
   const { refetch } = q;
   const retry = useCallback(() => void refetch(), [refetch]);
   const families = useFamilies().data;
+  // 네트워크는 되는데 세션 게이트가 아직 닫혀 있어 멈춘 경우는 오프라인이 아니라 로딩이다(F2).
+  const networkOnline = useIsOnline();
 
   // 이 사용자가 온보딩을 마친 적이 있는지(기기 로컬). 첫 확인이 서버에 닿지 못할 때만 쓴다.
   const [flag, setFlag] = useState<{ userId: string; ok: boolean } | null>(null);
@@ -121,7 +124,7 @@ export function useOnboarding(
     step: q.data?.step ?? null,
     pendingInvite: q.data?.pendingInvite ?? null,
     error: false,
-    offline: !q.data && (q.fetchStatus === 'paused' || sessionPending),
+    offline: !q.data && ((q.fetchStatus === 'paused' && !networkOnline) || sessionPending),
     retry,
   };
 }

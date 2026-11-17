@@ -9,6 +9,12 @@ import { hasProfile } from '@/src/onboarding/profile-api';
 import { isOnboarded, markOnboarded } from '@/src/onboarding/onboarded-flag';
 import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';
 import { qk } from '@/src/lib/query-keys';
+import {
+  closeSession,
+  openSession,
+  resetSessionGateForTests,
+  setNetworkOnline,
+} from '@/src/lib/session-gate';
 
 let mockStackMounts = 0;
 jest.mock('expo-router', () => {
@@ -262,5 +268,21 @@ describe('stored session while the live session is null (B1)', () => {
     expect(await screen.findByText('오프라인이라 확인할 수 없어요')).toBeTruthy();
     expect(screen.queryByText('redirect:"/login"')).toBeNull();
     expect(hasProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe('session gate (F2)', () => {
+  afterEach(() => resetSessionGateForTests());
+
+  it('shows a spinner, not the offline wall, while the network is up but the session gate is still closed', async () => {
+    set(true, null, 1);
+    setNetworkOnline(true);
+    closeSession();
+    await renderWithClient(<AppLayout />);
+    await act(async () => new Promise((r) => setTimeout(r, 20)));
+    expect(screen.queryByText('오프라인이라 확인할 수 없어요')).toBeNull();
+    expect(hasProfile).not.toHaveBeenCalled();
+    await act(async () => openSession('u1'));
+    expect(await screen.findByText('READY')).toBeTruthy();
   });
 });

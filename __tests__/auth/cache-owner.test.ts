@@ -5,6 +5,7 @@ import { resetGeofencing } from '@/src/geofence/sync-geofences';
 import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { syncCacheOwner } from '@/src/lib/query-client';
 import { clearOnboarded } from '@/src/onboarding/onboarded-flag';
+import { isSessionOpen, openSession, resetSessionGateForTests } from '@/src/lib/session-gate';
 
 jest.mock('@/src/lib/supabase', () => ({ AUTH_STORAGE_KEY: 'test-auth', supabase: {} }));
 jest.mock('@/src/lib/query-client', () => ({ syncCacheOwner: jest.fn().mockResolvedValue(undefined) }));
@@ -22,6 +23,7 @@ let client: QueryClient;
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
+  resetSessionGateForTests();
   client = new QueryClient();
   jest.spyOn(client, 'resumePausedMutations').mockResolvedValue(undefined);
 });
@@ -87,5 +89,33 @@ describe('null session with a stored refresh token (B1)', () => {
     await reconcileCacheOwner(client, null);
     expect(syncCacheOwner).toHaveBeenCalledWith(client, null);
     expect(clearOnboarded).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('session gate (F2)', () => {
+  it('opens the gate only after the owner check for a signed-in user', async () => {
+    let openAtSync: boolean | null = null;
+    (syncCacheOwner as jest.Mock).mockImplementationOnce(async () => {
+      openAtSync = isSessionOpen();
+    });
+    await reconcileCacheOwner(client, 'u1');
+    expect(openAtSync).toBe(false);
+    expect(isSessionOpen()).toBe(true);
+  });
+
+  it('closes the gate with no session, including offline-user mode', async () => {
+    openSession('u1');
+    await AsyncStorage.setItem(
+      'test-auth',
+      JSON.stringify({ refresh_token: 'r1', user: { id: '00000000-0000-4000-8000-000000000001' } })
+    );
+    await reconcileCacheOwner(client, null);
+    expect(isSessionOpen()).toBe(false);
+  });
+
+  it('keeps the gate closed when the owner check fails', async () => {
+    (syncCacheOwner as jest.Mock).mockRejectedValueOnce(new Error('storage'));
+    await reconcileCacheOwner(client, 'u1');
+    expect(isSessionOpen()).toBe(false);
   });
 });

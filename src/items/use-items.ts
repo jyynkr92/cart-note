@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { invalidateWhenIdle, newId, QUEUE_SCOPE, withPrepare } from '@/src/lib/mutation-utils';
+import {
+  invalidateWhenIdle,
+  newId,
+  QUEUE_SCOPE,
+  sessionGuarded,
+  withPrepare,
+} from '@/src/lib/mutation-utils';
 import { mk, qk } from '@/src/lib/query-keys';
 import { normalizeName } from '@/src/lib/text';
 import { toast } from '@/src/lib/toast';
@@ -72,7 +78,7 @@ type Spec<V> = {
 function define<V>(qc: QueryClient, spec: Spec<V>) {
   qc.setMutationDefaults(spec.key, {
     scope: QUEUE_SCOPE,
-    mutationFn: spec.run,
+    mutationFn: sessionGuarded(spec.run),
     onMutate: async (v: V) => {
       const ctx = await snapshot(qc, spec.lists(qc, v));
       spec.apply(qc, v);

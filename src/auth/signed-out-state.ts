@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { resetGeofencing } from '@/src/geofence/sync-geofences';
 import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { syncCacheOwner } from '@/src/lib/query-client';
+import { closeSession, openSession } from '@/src/lib/session-gate';
 import { clearOnboarded } from '@/src/onboarding/onboarded-flag';
 import { hasStoredSession } from './stored-session';
 
@@ -25,6 +26,8 @@ export async function clearSignedOutDeviceState(): Promise<void> {
 export async function reconcileCacheOwner(client: QueryClient, userId: string | null): Promise<void> {
   // 세션은 없지만 refresh token이 저장돼 있으면 오프라인 갱신 실패다(로그아웃 아님): 캐시/큐/기기 상태를 그대로 두고,
   // 소유자를 확정할 수 없으니 큐도 재개하지 않는다. 세션이 돌아오면(userId) 다시 불려 재개한다.
+  // 세션이 없으면 큐/쿼리 게이트를 닫는다(오프라인 사용자 모드 포함: 세션 없이 큐가 재생되면 anon으로 나간다).
+  if (userId === null) closeSession();
   if (userId === null && (await hasStoredSession())) return;
   try {
     await syncCacheOwner(client, userId);
@@ -37,5 +40,7 @@ export async function reconcileCacheOwner(client: QueryClient, userId: string | 
     await clearSignedOutDeviceState();
     return;
   }
+  // 소유자 확인이 끝난 사용자의 세션으로만 게이트를 연다(열리면 QueryClient가 큐를 재개한다).
+  openSession(userId);
   await client.resumePausedMutations().catch(() => {});
 }

@@ -11,7 +11,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { AuthProvider, useAuth } from '@/src/auth/AuthProvider';
+import { liveSessionCheck } from '@/src/auth/session-check';
 import { reconcileCacheOwner } from '@/src/auth/signed-out-state';
+import { installSessionCheck } from '@/src/lib/session-gate';
 // 지오펜스 작업 정의는 index.ts 진입점이 먼저 등록한다. 여기서의 import는 중복이어도 무해하다(모듈은 한 번만 평가).
 import '@/src/geofence/geofence-task';
 import {
@@ -21,6 +23,8 @@ import {
 import { persistOptions, queryClient, setupOnlineManager } from '@/src/lib/query-client';
 import { ToastHost } from '@/src/lib/toast';
 
+// 큐 요청 직전의 세션 확인을 설치한 뒤 네트워크/세션 게이트를 연결한다(F2).
+installSessionCheck(liveSessionCheck);
 setupOnlineManager();
 setupNotificationHandler();
 
