@@ -8,6 +8,7 @@ import {
   updateItem,
 } from '@/src/items/item-api';
 import { supabase } from '@/src/lib/supabase';
+import { RetryableNetworkError } from '@/src/lib/queue-retry';
 import { chain } from '@/test-utils/supabase-chain';
 
 jest.mock('@/src/lib/supabase', () => ({ supabase: { from: jest.fn() } }));
@@ -178,6 +179,24 @@ describe('batching (B3)', () => {
     await run();
     expect(batches.map((b) => b.length)).toEqual([100, 100, 50]);
     expect(batches.flat()).toEqual(ids);
+  });
+
+  it('turns a network failure mid-batch into a retryable error (F7)', async () => {
+    const netErr = { message: 'TypeError: Network request failed', code: '' };
+    from
+      .mockReturnValueOnce(chain({ error: null }).builder)
+      .mockReturnValueOnce(chain({ error: netErr }).builder);
+    const err = await deleteItems(ids).catch((e) => e);
+    expect(err).toBeInstanceOf(RetryableNetworkError);
+    expect(err.cause).toBe(netErr);
+    expect(from).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps non-network errors as they are (F7)', async () => {
+    from.mockReturnValueOnce(chain({ error: { code: '42501' } }).builder);
+    const err = await clearListItems('l1', ids).catch((e) => e);
+    expect(err).not.toBeInstanceOf(RetryableNetworkError);
+    expect(err).toEqual({ code: '42501' });
   });
 
   it('sends batches one after another and stops at the first error', async () => {

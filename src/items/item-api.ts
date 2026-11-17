@@ -1,5 +1,7 @@
 import { supabase } from '@/src/lib/supabase';
 import type { Database } from '@/src/lib/database.types';
+import { isNetworkError } from '@/src/lib/network-error';
+import { RetryableNetworkError } from '@/src/lib/queue-retry';
 
 export type Item = Database['public']['Tables']['items']['Row'];
 
@@ -39,12 +41,23 @@ export async function updateItem(id: string, patch: ItemPatch): Promise<void> {
   check(await supabase.from('items').update(patch).eq('id', id));
 }
 
-/** `.in('id', …)`은 URL 쿼리로 가므로 길이 제한을 넘지 않게 100개씩 나눠 순서대로 보낸다. 첫 오류에서 멈춘다. */
+/**
+ * `.in('id', …)`은 URL 쿼리로 가므로 길이 제한을 넘지 않게 100개씩 나눠 순서대로 보낸다. 첫 오류에서 멈춘다.
+ * 연결 오류는 RetryableNetworkError로 바꿔 큐가 롤백 대신 pause 후 mutation 전체를 다시 보내게 한다
+ * (이미 적용된 묶음은 id·조건 때문에 다시 보내도 같은 결과다).
+ */
 export const ID_BATCH_SIZE = 100;
 
 async function inBatches(ids: string[], run: (batch: string[]) => PromiseLike<{ error: unknown }>) {
   for (let i = 0; i < ids.length; i += ID_BATCH_SIZE) {
-    check(await run(ids.slice(i, i + ID_BATCH_SIZE)));
+    let res: { error: unknown };
+    try {
+      res = await run(ids.slice(i, i + ID_BATCH_SIZE));
+    } catch (e) {
+      throw isNetworkError(e) ? new RetryableNetworkError(e) : e;
+    }
+    if (res.error && isNetworkError(res.error)) throw new RetryableNetworkError(res.error);
+    check(res);
   }
 }
 

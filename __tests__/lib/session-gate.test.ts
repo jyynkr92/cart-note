@@ -16,6 +16,7 @@ import {
   setNetworkOnline,
 } from '@/src/lib/session-gate';
 import { toast } from '@/src/lib/toast';
+import { RetryableNetworkError } from '@/src/lib/queue-retry';
 import { disposeClient } from '@/test-utils/dispose-client';
 
 jest.mock('@/src/lib/supabase', () => ({ supabase: {} }));
@@ -137,5 +138,40 @@ describe('offline queue without a session (F2)', () => {
     });
     expect(api.deleteItems).not.toHaveBeenCalled();
     expect(mutation().state.isPaused).toBe(true);
+  });
+});
+
+describe('network failure mid-mutation (F7)', () => {
+  it('pauses and later replays the whole mutation instead of rolling back', async () => {
+    openSession('u1');
+    setNetworkOnline(true);
+    session = true;
+    api.deleteItems.mockImplementationOnce(async () => {
+      // 요청 도중 연결이 끊겼다(NetInfo가 뒤이어 오프라인을 알린다).
+      setNetworkOnline(false);
+      throw new RetryableNetworkError(new TypeError('Network request failed'));
+    });
+    await deleteA();
+    await waitFor(() => expect(mutation().state.isPaused).toBe(true));
+    expect(mutation().state.status).toBe('pending');
+    expect(persisted()).toBe(true);
+    expect(ids()).toEqual(['b']); // 롤백하지 않는다
+    expect(toast.error).not.toHaveBeenCalled();
+
+    await act(async () => setNetworkOnline(true));
+    await waitFor(() => expect(mutation().state.status).toBe('success'));
+    expect(api.deleteItems).toHaveBeenCalledTimes(2);
+    expect(api.deleteItems).toHaveBeenLastCalledWith(['a']);
+  });
+
+  it('still fails and rolls back on a non-network error', async () => {
+    openSession('u1');
+    setNetworkOnline(true);
+    session = true;
+    api.deleteItems.mockRejectedValueOnce({ code: '42501' });
+    await deleteA();
+    await waitFor(() => expect(mutation().state.status).toBe('error'));
+    expect(ids()).toEqual(['a', 'b']);
+    expect(toast.error).toHaveBeenCalled();
   });
 });
