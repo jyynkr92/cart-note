@@ -106,7 +106,7 @@ EAS 빌드를 쓰려면 `eas.json`에 `developmentClient: true`인 development �
 | 타입 검사 | `npm run typecheck` |
 | DB 테스트 (pgTAP, 로컬 Supabase 실행 중이어야 함) | `npx supabase test db` |
 
-`npm run typecheck`는 먼저 `expo customize tsconfig.json`을 실행한 뒤 `tsc --noEmit`을 돌린다. typed routes 타입은 `.expo/types`에서 오며, 개발 서버(`npx expo start`)가 생성한다. 이 디렉터리는 커밋하지 않는다.
+`npm run typecheck`는 먼저 `expo customize tsconfig.json`을 실행한 뒤 `tsc --noEmit`을 돌린다. typed routes 타입은 `.expo/types`에서 오며, 이 단계(또는 개발 서버 `npx expo start`)가 생성한다. 이 단계를 빼면 `Href`가 느슨한 타입으로 돌아가 잘못된 경로도 타입 검사를 통과하므로 지우지 않는다. 이 디렉터리는 커밋하지 않는다.
 
 ## 문서
 
