@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { mk } from '@/src/lib/query-keys';
 import { newId } from '@/src/lib/mutation-utils';
 import { supabase } from '@/src/lib/supabase';
-import { applyChange, type RealtimeTable } from './apply-change';
+import { applyChange, REALTIME_INVALIDATE, type RealtimeTable } from './apply-change';
 
 const TABLES: RealtimeTable[] = ['items', 'lists', 'list_locations'];
 const IDLE_SKIP = new Set(['onboarding']);
@@ -44,7 +44,10 @@ export function useFamilyRealtime(familyId: string | null): void {
       // 온보딩 상태는 항상 제외한다(재조회가 실패하면 가드가 오류 화면으로 바뀐다).
       // 대기 중인 mutation이 있으면 낙관적 items/lists/locations도 건드리지 않는다(큐가 비면 invalidateWhenIdle이 처리).
       const skip = qc.isMutating({ mutationKey: mk.all }) > 0 ? BUSY_SKIP : IDLE_SKIP;
-      void qc.invalidateQueries({ predicate: (q) => !skip.has(String(q.queryKey[0])) });
+      void qc.invalidateQueries(
+        { predicate: (q) => !skip.has(String(q.queryKey[0])) },
+        REALTIME_INVALIDATE
+      );
     });
     return () => {
       disposed = true;

@@ -218,15 +218,33 @@ describe('DELETE events for rows that are not cached', () => {
     qc.setQueryData(qk.allLocations(), [{ id: 'y', list_id: 'l2' }]);
   });
 
-  it('items: an uncached id only refreshes the home counts (B4)', () => {
-    applyChange(qc, 'items', change('DELETE', null, { id: 'other-group-item' }));
-    expect(keys()).toEqual([['lists']]);
+  it('items: an uncached id only refreshes the home counts, once per burst (B4, F1)', () => {
+    jest.useFakeTimers();
+    try {
+      for (const id of ['x1', 'x2', 'x3']) applyChange(qc, 'items', change('DELETE', null, { id }));
+      expect(spy).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(999);
+      applyChange(qc, 'items', change('DELETE', null, { id: 'x4' })); // 트레일링: 다시 1초 미룬다
+      jest.advanceTimersByTime(999);
+      expect(spy).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(1);
+      expect(keys()).toEqual([['lists']]);
+      expect(spy.mock.calls[0][1]).toEqual({ cancelRefetch: false });
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
-  it('items: an uncached id does nothing while the queue is busy (B4)', () => {
-    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
-    applyChange(qc, 'items', change('DELETE', null, { id: 'other-group-item' }));
-    expect(spy).not.toHaveBeenCalled();
+  it('items: an uncached id does nothing while the queue is busy (B4, F1)', () => {
+    jest.useFakeTimers();
+    try {
+      applyChange(qc, 'items', change('DELETE', null, { id: 'other-group-item' }));
+      jest.spyOn(qc, 'isMutating').mockReturnValue(1); // 발화 시점에 바쁘면 건너뛴다
+      jest.advanceTimersByTime(1000);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('lists: ignores an id that is in no lists cache', () => {
@@ -291,4 +309,17 @@ describe('uncached DELETE while a fetch for that cache is in flight (B4)', () =>
     applyChange(qc, 'items', change('DELETE', null, { id: 'new-row' }));
     expect(spy).not.toHaveBeenCalled();
   });
+});
+
+// F1: Realtime이 일으키는 무효화는 진행 중인 조회를 취소하고 다시 시작하지 않는다.
+it('passes cancelRefetch: false for every realtime invalidation (F1)', () => {
+  qc.setQueryData(qk.items('l1'), [item('a')]);
+  qc.setQueryData(qk.locations('l1'), [{ id: 'x', list_id: 'l1' }]);
+  applyChange(qc, 'items', change('INSERT', item('b')));
+  applyChange(qc, 'items', change('DELETE', null, { id: 'a' }));
+  applyChange(qc, 'lists', change('UPDATE', { id: 'l1', family_id: 'f1' }));
+  applyChange(qc, 'list_locations', change('INSERT', { id: 'y', list_id: 'l1', family_id: 'f1' }));
+  applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
+  expect(spy.mock.calls.length).toBeGreaterThan(5);
+  for (const c of spy.mock.calls) expect(c[1]).toEqual({ cancelRefetch: false });
 });

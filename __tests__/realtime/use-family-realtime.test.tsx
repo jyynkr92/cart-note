@@ -76,6 +76,8 @@ it('invalidates everything but onboarding on every SUBSCRIBED, including the fir
   expect(predicate({ queryKey: ['families'] })).toBe(true);
   // 온보딩 재조회가 오프라인에서 실패하면 가드가 오류 화면으로 바뀌므로 건드리지 않는다.
   expect(predicate({ queryKey: ['onboarding', 'u1'] })).toBe(false);
+  // 진행 중인 조회를 취소하고 다시 시작하지 않는다(F1).
+  expect(spy.mock.calls[0][1]).toEqual({ cancelRefetch: false });
   statusCb('CHANNEL_ERROR');
   statusCb('SUBSCRIBED');
   expect(spy).toHaveBeenCalledTimes(2);
