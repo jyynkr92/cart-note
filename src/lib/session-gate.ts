@@ -21,25 +21,35 @@ export class SessionUnavailableError extends Error {
 let network: boolean | null = null; // null = 아직 모름(NetInfo 연결 전, 테스트)
 let ready = false;
 let verifiedUserId: string | null = null;
-let check: () => Promise<boolean> = async () => true;
+/** 테스트용: 어떤 확인된 사용자와도 일치하는 세션(jest.setup이 설치). 앱 코드는 쓰지 않는다. */
+export const ANY_USER_SESSION = '*any-user*';
+
+// 기본값은 "세션 없음"(fail closed). 앱은 app/_layout에서 getSession 기반 확인을 설치한다.
+const noSession = async (): Promise<string | null> => null;
+let check: () => Promise<string | null> = noSession;
 const networkListeners = new Set<() => void>();
 
 function apply() {
   onlineManager.setOnline((network ?? true) && ready);
 }
 
-/** 실제 세션 확인(앱 시작 시 supabase.auth.getSession 기반으로 설치). */
-export function installSessionCheck(fn: () => Promise<boolean>): void {
+/** 실제 세션 확인(세션 사용자 id, 없으면 null). 앱 시작 시 supabase.auth.getSession 기반으로 설치한다. */
+export function installSessionCheck(fn: () => Promise<string | null>): void {
   check = fn;
 }
 
-/** 요청 직전 세션 확인. 실패는 세션 없음으로 본다. */
+/**
+ * 요청 직전 확인: 살아 있는 세션이 있고 그 사용자가 게이트를 연(소유자 확인된) 사용자와 같은지.
+ * 실패는 세션 없음으로 본다.
+ */
 export async function hasLiveSession(): Promise<boolean> {
+  let uid: string | null;
   try {
-    return await check();
+    uid = await check();
   } catch {
     return false;
   }
+  return uid !== null && (uid === ANY_USER_SESSION || uid === verifiedUserId);
 }
 
 export function setNetworkOnline(v: boolean): void {
@@ -72,10 +82,12 @@ export function closeSession(): void {
   apply();
 }
 
-/** 세션이 돌아왔을 때: 이미 확인된 같은 사용자일 때만 다시 연다. */
+/**
+ * 세션이 돌아왔을 때: 이미 확인된 같은 사용자일 때만 다시 연다. 다른 사용자의 세션이면 게이트를 닫는다
+ * (그 사용자의 소유자 확인은 reconcileCacheOwner가 하고 나서 연다).
+ */
 export function sessionRestored(userId: string): void {
-  if (userId !== verifiedUserId) return;
-  ready = true;
+  ready = userId === verifiedUserId;
   apply();
 }
 
@@ -94,6 +106,6 @@ export function resetSessionGateForTests(): void {
   network = null;
   ready = false;
   verifiedUserId = null;
-  check = async () => true;
+  check = noSession;
   networkListeners.clear();
 }

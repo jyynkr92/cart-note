@@ -9,7 +9,9 @@ import { createQueryClient, persistOptions } from '@/src/lib/query-client';
 import { qk } from '@/src/lib/query-keys';
 import {
   closeSession,
+  hasLiveSession,
   installSessionCheck,
+  isSessionOpen,
   openSession,
   resetSessionGateForTests,
   sessionRestored,
@@ -48,13 +50,15 @@ const item = (id: string): Item => ({
 
 let client: ReturnType<typeof createQueryClient>;
 let session: boolean;
+let sessionUser = 'u1';
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
   resetSessionGateForTests();
   onlineManager.setOnline(true);
   session = false;
-  installSessionCheck(async () => session);
+  sessionUser = 'u1';
+  installSessionCheck(async () => (session ? sessionUser : null));
   for (const fn of Object.values(api))
     if (jest.isMockFunction(fn)) fn.mockResolvedValue(undefined as never);
   client = createQueryClient();
@@ -173,5 +177,44 @@ describe('network failure mid-mutation (F7)', () => {
     await waitFor(() => expect(mutation().state.status).toBe('error'));
     expect(ids()).toEqual(['a', 'b']);
     expect(toast.error).toHaveBeenCalled();
+  });
+});
+
+describe('session must belong to the verified user (M-1)', () => {
+  it("does not send when getSession returns a different user's session", async () => {
+    openSession('u1');
+    setNetworkOnline(true);
+    session = true;
+    sessionUser = 'u2';
+    await deleteA();
+    await waitFor(() => expect(mutation().state.isPaused).toBe(true));
+    expect(api.deleteItems).not.toHaveBeenCalled();
+    expect(isSessionOpen()).toBe(false);
+  });
+
+  it("closes the gate when a different user's session arrives", async () => {
+    openSession('u1');
+    setNetworkOnline(true);
+    expect(onlineManager.isOnline()).toBe(true);
+    sessionRestored('u2');
+    expect(isSessionOpen()).toBe(false);
+    expect(onlineManager.isOnline()).toBe(false);
+  });
+});
+
+describe('fail-closed default (M-2)', () => {
+  it('has no session until a real check is installed', async () => {
+    resetSessionGateForTests();
+    await expect(hasLiveSession()).resolves.toBe(false);
+  });
+
+  it('the root layout installs the live getSession check', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const src: string = require('fs').readFileSync(
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('path').join(process.cwd(), 'app/_layout.tsx'),
+      'utf8'
+    );
+    expect(src).toMatch(/installSessionCheck\(liveSessionCheck\)/);
   });
 });
