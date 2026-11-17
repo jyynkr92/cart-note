@@ -1,4 +1,4 @@
-import { onlineManager } from '@tanstack/react-query';
+import { onlineManager, timeoutManager } from '@tanstack/react-query';
 
 /**
  * 쓰기 큐(그리고 쿼리)를 "네트워크 연결 AND 소유자가 확인된 세션"일 때만 진행시키는 게이트.
@@ -19,6 +19,8 @@ export class SessionUnavailableError extends Error {
 }
 
 let network: boolean | null = null; // null = 아직 모름(NetInfo 연결 전, 테스트)
+// NetInfo는 연결됐다고 하지만 서버에 닿지 못한 상태(요청 도중 연결 오류). 재탐지로만 다시 켠다.
+let reachable = true;
 let ready = false;
 let verifiedUserId: string | null = null;
 /** 테스트용: 어떤 확인된 사용자와도 일치하는 세션(jest.setup이 설치). 앱 코드는 쓰지 않는다. */
@@ -30,7 +32,62 @@ let check: () => Promise<string | null> = noSession;
 const networkListeners = new Set<() => void>();
 
 function apply() {
-  onlineManager.setOnline((network ?? true) && ready);
+  onlineManager.setOnline((network ?? true) && reachable && ready);
+}
+
+// ---- 재탐지: 서버 연결(reachable)과 같은 사용자의 세션(ready)을 백오프로 다시 확인한다 ----
+const allowReachable = async () => true;
+let reachabilityProbe: () => Promise<boolean> = allowReachable;
+/** 다시 확인하는 간격(마지막 값을 계속 쓴다). */
+export const REPROBE_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];
+let attempt = 0;
+let timer: ReturnType<typeof timeoutManager.setTimeout> | null = null;
+let probing = false;
+
+/** 서버에 닿는지 확인하는 함수(앱 시작 시 설치). 기본은 닿는다고 본다(재시도 한 번으로 다시 확인된다). */
+export function installReachabilityProbe(fn: () => Promise<boolean>): void {
+  reachabilityProbe = fn;
+}
+
+function needsProbe(): boolean {
+  return !reachable || (!ready && verifiedUserId !== null);
+}
+
+function cancelProbe() {
+  if (timer !== null) timeoutManager.clearTimeout(timer);
+  timer = null;
+}
+
+function scheduleProbe() {
+  if (timer !== null || !needsProbe()) return;
+  const delay = REPROBE_DELAYS_MS[Math.min(attempt, REPROBE_DELAYS_MS.length - 1)];
+  attempt++;
+  timer = timeoutManager.setTimeout(() => {
+    timer = null;
+    void reprobeNow();
+  }, delay);
+}
+
+/** 지금 다시 확인한다(NetInfo 복귀, 앱 활성화, 예약된 재탐지). 아직 나쁘면 다음 재탐지를 예약한다. 절대 던지지 않는다. */
+export async function reprobeNow(): Promise<void> {
+  cancelProbe();
+  if (probing || !needsProbe()) return;
+  probing = true;
+  try {
+    if (!reachable) {
+      try {
+        reachable = await reachabilityProbe();
+      } catch {
+        reachable = false;
+      }
+    }
+    if (reachable && !ready && verifiedUserId !== null && (await hasLiveSession())) ready = true;
+  } finally {
+    probing = false;
+  }
+  apply();
+  if (needsProbe()) scheduleProbe();
+  else attempt = 0;
 }
 
 /** 실제 세션 확인(세션 사용자 id, 없으면 null). 앱 시작 시 supabase.auth.getSession 기반으로 설치한다. */
@@ -53,9 +110,15 @@ export async function hasLiveSession(): Promise<boolean> {
 }
 
 export function setNetworkOnline(v: boolean): void {
+  const regained = v && network !== true;
   network = v;
   apply();
   for (const l of networkListeners) l();
+  // 네트워크가 돌아왔으면 백오프를 기다리지 않고 바로 다시 확인한다.
+  if (regained && needsProbe()) {
+    attempt = 0;
+    void reprobeNow();
+  }
 }
 
 /** 네트워크 연결 상태(세션과 무관). 모르면 null. 오프라인 배너는 이것을 쓴다. */
@@ -80,6 +143,7 @@ export function closeSession(): void {
   verifiedUserId = null;
   ready = false;
   apply();
+  if (!needsProbe()) cancelProbe();
 }
 
 /**
@@ -91,10 +155,21 @@ export function sessionRestored(userId: string): void {
   apply();
 }
 
-/** 요청 직전 확인에서 세션이 없었다: 확인된 사용자는 두고 게이트만 닫는다. */
+/** 요청 직전 확인에서 세션이 없었다: 확인된 사용자는 두고 게이트만 닫은 뒤, 같은 사용자의 세션을 다시 확인한다. */
 export function markSessionUnavailable(): void {
   ready = false;
   apply();
+  scheduleProbe();
+}
+
+/**
+ * 요청 도중 연결 오류(RetryableNetworkError): NetInfo가 연결됐다고 해도 서버에 닿지 않는다고 보고 게이트를 닫는다.
+ * 큐 mutation은 즉시 pause되어 영속화되고(무한 재시도로 pending에 머물지 않는다), 재탐지가 성공하면 재개된다.
+ */
+export function markBackendUnreachable(): void {
+  reachable = false;
+  apply();
+  scheduleProbe();
 }
 
 export function isSessionOpen(): boolean {
@@ -103,6 +178,11 @@ export function isSessionOpen(): boolean {
 
 /** 테스트용 초기화(onlineManager는 건드리지 않는다). */
 export function resetSessionGateForTests(): void {
+  cancelProbe();
+  attempt = 0;
+  probing = false;
+  reachable = true;
+  reachabilityProbe = allowReachable;
   network = null;
   ready = false;
   verifiedUserId = null;

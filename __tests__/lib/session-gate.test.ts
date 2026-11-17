@@ -7,9 +7,14 @@ import type { Item } from '@/src/items/item-api';
 import { useDeleteItems } from '@/src/items/use-items';
 import { createQueryClient, persistOptions } from '@/src/lib/query-client';
 import { qk } from '@/src/lib/query-keys';
+import { dehydrate } from '@tanstack/react-query';
 import {
   closeSession,
   hasLiveSession,
+  installReachabilityProbe,
+  markBackendUnreachable,
+  markSessionUnavailable,
+  reprobeNow,
   installSessionCheck,
   isSessionOpen,
   openSession,
@@ -216,5 +221,92 @@ describe('fail-closed default (M-2)', () => {
       'utf8'
     );
     expect(src).toMatch(/installSessionCheck\(liveSessionCheck\)/);
+  });
+});
+
+describe('backend unreachable while NetInfo says online (I-2)', () => {
+  it('pauses (persisted) instead of retrying forever, and replays after a successful probe', async () => {
+    openSession('u1');
+    setNetworkOnline(true);
+    session = true;
+    installReachabilityProbe(async () => false);
+    api.deleteItems.mockRejectedValueOnce(new RetryableNetworkError(new TypeError('Network request failed')));
+    await deleteA();
+    await waitFor(() => expect(mutation().state.isPaused).toBe(true));
+    expect(onlineManager.isOnline()).toBe(false);
+    const state = dehydrate(client, {
+      shouldDehydrateMutation: persistOptions.dehydrateOptions!.shouldDehydrateMutation,
+    });
+    expect(state.mutations).toHaveLength(1);
+    expect(ids()).toEqual(['b']);
+    expect(toast.error).not.toHaveBeenCalled();
+
+    installReachabilityProbe(async () => true);
+    await act(async () => reprobeNow());
+    await waitFor(() => expect(mutation().state.status).toBe('success'));
+    expect(api.deleteItems).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('re-probe schedule (I-2, M-3)', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('re-probes reachability with backoff (5s, 10s, 20s…) until it succeeds', async () => {
+    const probe = jest.fn(async () => false);
+    installReachabilityProbe(probe);
+    openSession('u1');
+    setNetworkOnline(true);
+    markBackendUnreachable();
+    expect(onlineManager.isOnline()).toBe(false);
+    await jest.advanceTimersByTimeAsync(4999);
+    expect(probe).toHaveBeenCalledTimes(0);
+    await jest.advanceTimersByTimeAsync(1);
+    expect(probe).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(probe).toHaveBeenCalledTimes(2);
+    probe.mockResolvedValue(true);
+    await jest.advanceTimersByTimeAsync(20_000);
+    expect(probe).toHaveBeenCalledTimes(3);
+    expect(onlineManager.isOnline()).toBe(true);
+    await jest.advanceTimersByTimeAsync(120_000);
+    expect(probe).toHaveBeenCalledTimes(3); // 건강해지면 멈춘다
+  });
+
+  it('re-probes immediately when NetInfo regains the network', async () => {
+    const probe = jest.fn(async () => true);
+    installReachabilityProbe(probe);
+    openSession('u1');
+    setNetworkOnline(true);
+    markBackendUnreachable();
+    setNetworkOnline(false);
+    await act(async () => setNetworkOnline(true));
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(onlineManager.isOnline()).toBe(true);
+  });
+
+  it('re-probes the session after markSessionUnavailable and reopens for the same user (M-3)', async () => {
+    openSession('u1');
+    setNetworkOnline(true);
+    session = false;
+    markSessionUnavailable();
+    expect(onlineManager.isOnline()).toBe(false);
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(onlineManager.isOnline()).toBe(false);
+    session = true;
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(isSessionOpen()).toBe(true);
+    expect(onlineManager.isOnline()).toBe(true);
+  });
+
+  it('does not keep probing after sign-out', async () => {
+    const probe = jest.fn(async () => false);
+    installReachabilityProbe(probe);
+    openSession('u1');
+    setNetworkOnline(true);
+    markSessionUnavailable();
+    closeSession();
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(probe).not.toHaveBeenCalled();
   });
 });

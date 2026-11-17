@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import { AppState } from 'react-native';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import {
   defaultShouldDehydrateMutation,
@@ -13,7 +14,7 @@ import { registerListMutations } from '@/src/lists/use-lists';
 import { registerLocationMutations } from '@/src/locations/use-locations';
 import { cancelPendingRealtimeWork } from '@/src/realtime/apply-change';
 import { queuedRetryDelay, shouldRetryQueued } from './queue-retry';
-import { setNetworkOnline } from './session-gate';
+import { reprobeNow, setNetworkOnline } from './session-gate';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CACHE_KEY = 'cart-note-query-cache';
@@ -66,6 +67,10 @@ export function setupOnlineManager(): void {
   onlineManager.setEventListener(() => () => {});
   setNetworkOnline(true);
   NetInfo.addEventListener((s) => setNetworkOnline(!!s.isConnected && s.isInternetReachable !== false));
+  // 앱으로 돌아오면 서버 연결/세션을 바로 다시 확인한다(닫혀 있을 때만 실제로 확인한다).
+  AppState.addEventListener('change', (s) => {
+    if (s === 'active') void reprobeNow();
+  });
 }
 
 /** 로그아웃/계정 전환 시 메모리와 디스크 캐시(오프라인 큐 포함)를 모두 지운다. */

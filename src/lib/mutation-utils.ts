@@ -1,7 +1,13 @@
 import type { QueryClient, UseMutationResult } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
 import { mk } from './query-keys';
-import { hasLiveSession, markSessionUnavailable, SessionUnavailableError } from './session-gate';
+import { RetryableNetworkError } from './queue-retry';
+import {
+  hasLiveSession,
+  markBackendUnreachable,
+  markSessionUnavailable,
+  SessionUnavailableError,
+} from './session-gate';
 
 /**
  * 모든 쓰기 mutation이 공유하는 scope. 같은 scope의 mutation은 순서대로 한 번에 하나씩 실행되므로
@@ -19,7 +25,13 @@ export function sessionGuarded<V>(run: (v: V) => Promise<void>): (v: V) => Promi
       markSessionUnavailable();
       throw new SessionUnavailableError();
     }
-    await run(v);
+    try {
+      await run(v);
+    } catch (e) {
+      // 요청 도중 연결이 끊겼다: 게이트를 닫아 재시도 정책이 곧바로 pause(영속화)하게 한다.
+      if (e instanceof RetryableNetworkError) markBackendUnreachable();
+      throw e;
+    }
   };
 }
 
