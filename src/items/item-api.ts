@@ -82,8 +82,13 @@ export async function clearListItems(listId: string, ids: string[]): Promise<voi
   );
 }
 
-export async function moveItems(toListId: string, ids: string[]): Promise<void> {
-  await inBatches(ids, (batch) =>
-    supabase.from('items').update({ list_id: toListId }).in('id', batch)
-  );
+/**
+ * 항목 이동. fromListId가 있으면 아직 원래 목록에 있는 항목만 옮긴다(재실행 때 그 사이 다른 곳으로 옮겨진 항목을
+ * 다시 끌어오지 않게). fromListId가 없는 이전 형식 변수는 예전처럼 id로만 옮긴다.
+ */
+export async function moveItems(toListId: string, ids: string[], fromListId?: string): Promise<void> {
+  await inBatches(ids, (batch) => {
+    const q = supabase.from('items').update({ list_id: toListId }).in('id', batch);
+    return fromListId ? q.eq('list_id', fromListId) : q;
+  });
 }

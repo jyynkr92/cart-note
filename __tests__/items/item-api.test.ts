@@ -117,6 +117,27 @@ describe('moveItems', () => {
     expect(from).not.toHaveBeenCalled();
   });
 });
+describe('moveItems source guard (M-5)', () => {
+  it('only moves items that are still in the source list', async () => {
+    const calls = mockQuery({ error: null });
+    await moveItems('l2', ['a', 'b'], 'l1');
+    expect(calls).toEqual([
+      ['update', [{ list_id: 'l2' }]],
+      ['in', ['id', ['a', 'b']]],
+      ['eq', ['list_id', 'l1']],
+    ]);
+  });
+
+  it('keeps the old query for legacy variables without a source list', async () => {
+    const calls = mockQuery({ error: null });
+    await moveItems('l2', ['a']);
+    expect(calls).toEqual([
+      ['update', [{ list_id: 'l2' }]],
+      ['in', ['id', ['a']]],
+    ]);
+  });
+});
+
 
 // B2: 재실행 때 id만으로 지우면, 그 사이 다른 목록으로 옮겨졌거나 다시 미완료가 된 항목까지 지운다.
 describe('clear guards (B2)', () => {

@@ -178,7 +178,7 @@ export function registerItemMutations(qc: QueryClient) {
 
   define<MoveVars>(qc, {
     key: mk.moveItems,
-    run: (v) => api.moveItems(v.toListId, v.ids),
+    run: (v) => api.moveItems(v.toListId, v.ids, v.fromListId),
     lists: (_qc, v) => [v.fromListId, v.toListId],
     apply: (qc, v) => {
       const from = qc.getQueryData<Item[]>(qk.items(v.fromListId)) ?? [];

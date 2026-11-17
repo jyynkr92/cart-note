@@ -235,7 +235,7 @@ describe('move', () => {
     await fireEvent.press(await screen.findByText('계란'));
     await fireEvent.press(await screen.findByRole('button', { name: '선택 항목 이동' }));
     await fireEvent.press(await screen.findByRole('button', { name: '쿠팡' }));
-    await waitFor(() => expect(moveItems).toHaveBeenCalledWith('l2', ['i1', 'i3']));
+    await waitFor(() => expect(moveItems).toHaveBeenCalledWith('l2', ['i1', 'i3'], 'l1'));
     await waitFor(() => expect(screen.queryByText(/개 선택됨/)).toBeNull());
     expect(screen.queryByRole('button', { name: '쿠팡' })).toBeNull();
   });

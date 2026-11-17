@@ -161,7 +161,7 @@ it('moves items out of the source cache and into the target cache', async () => 
   const target = client.getQueryData<Item[]>(qk.items('l2'))!;
   expect(target.map((i) => i.id).sort()).toEqual(['a', 'c']);
   expect(target.find((i) => i.id === 'a')!.list_id).toBe('l2');
-  expect(mocked.moveItems).toHaveBeenCalledWith('l2', ['a']);
+  expect(mocked.moveItems).toHaveBeenCalledWith('l2', ['a'], 'l1');
 });
 
 it('clears only done items from the cache', async () => {

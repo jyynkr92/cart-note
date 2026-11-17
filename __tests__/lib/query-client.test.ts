@@ -114,7 +114,8 @@ describe('offline queue (Review Focus 5)', () => {
     await second.resumePausedMutations();
 
     expect(calls).toEqual(['move', 'clear']);
-    expect(api.moveItems).toHaveBeenCalledWith('l2', ['a']);
+    // 재실행 때도 원래 목록에 남아 있는 항목만 옮긴다(M-5).
+    expect(api.moveItems).toHaveBeenCalledWith('l2', ['a'], 'l1');
     // 오프라인에서 보이던 항목(c, 옮겨 온 a)만 지운다. 그 사이 다른 멤버가 l2에 넣은 항목은 남는다(A2).
     expect(api.clearListItems).toHaveBeenCalledTimes(1);
     expect(api.clearListItems).toHaveBeenCalledWith('l2', ['c', 'a']);
