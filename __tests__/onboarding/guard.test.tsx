@@ -6,6 +6,7 @@ import AppLayout from '@/app/(app)/_layout';
 import { createFamily, fetchMyFamilies } from '@/src/groups/group-api';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
 import { refreshSession, signOut } from '@/src/auth/auth-api';
+import { reconcileCacheOwner } from '@/src/auth/signed-out-state';
 import { fireEvent } from '@testing-library/react-native';
 import { hasProfile } from '@/src/onboarding/profile-api';
 import { isOnboarded, markOnboarded } from '@/src/onboarding/onboarded-flag';
@@ -46,6 +47,11 @@ jest.mock('@/src/realtime/use-family-realtime', () => ({ useFamilyRealtime: jest
 jest.mock('@/src/onboarding/pending-invite', () => ({
   getPendingInvite: jest.fn(),
   clearPendingInvite: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('@/src/lib/supabase', () => ({ AUTH_STORAGE_KEY: 'test-auth', supabase: {} }));
+jest.mock('@/src/lib/query-client', () => ({
+  syncCacheOwner: jest.fn().mockRejectedValue(new Error('storage')),
+  clearUserCache: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('@/src/auth/auth-api', () => ({
   signOut: jest.fn().mockResolvedValue(undefined),
@@ -337,5 +343,22 @@ describe('offline wall actions (F6)', () => {
     await fireEvent.press(screen.getByRole('button', { name: '다시 시도' }));
     await waitFor(() => expect(refreshSession).toHaveBeenCalled());
     expect(hasProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe('owner check keeps failing (I-1)', () => {
+  afterEach(() => resetSessionGateForTests());
+
+  it('does not leave a bare spinner forever: the gate opens after the fallback', async () => {
+    set(true, null, 1);
+    setNetworkOnline(true);
+    closeSession();
+    await renderWithClient(<AppLayout />);
+    await act(async () => new Promise((r) => setTimeout(r, 20)));
+    expect(screen.queryByText('READY')).toBeNull();
+    expect(client.getQueryData(qk.onboarding('u1'))).toBeUndefined();
+    // syncCacheOwner가 계속 실패한다(모킹).
+    await act(async () => reconcileCacheOwner(client, 'u1'));
+    expect(await screen.findByText('READY')).toBeTruthy();
   });
 });

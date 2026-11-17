@@ -3,12 +3,15 @@ import { QueryClient } from '@tanstack/react-query';
 import { reconcileCacheOwner } from '@/src/auth/signed-out-state';
 import { resetGeofencing } from '@/src/geofence/sync-geofences';
 import { clearCurrentGroup } from '@/src/groups/current-group-store';
-import { syncCacheOwner } from '@/src/lib/query-client';
+import { clearUserCache, syncCacheOwner } from '@/src/lib/query-client';
 import { clearOnboarded } from '@/src/onboarding/onboarded-flag';
 import { isSessionOpen, openSession, resetSessionGateForTests } from '@/src/lib/session-gate';
 
 jest.mock('@/src/lib/supabase', () => ({ AUTH_STORAGE_KEY: 'test-auth', supabase: {} }));
-jest.mock('@/src/lib/query-client', () => ({ syncCacheOwner: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('@/src/lib/query-client', () => ({
+  syncCacheOwner: jest.fn().mockResolvedValue(undefined),
+  clearUserCache: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('@/src/geofence/sync-geofences', () => ({
   resetGeofencing: jest.fn().mockResolvedValue(undefined),
 }));
@@ -24,6 +27,8 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
   resetSessionGateForTests();
+  (syncCacheOwner as jest.Mock).mockReset().mockResolvedValue(undefined);
+  (clearUserCache as jest.Mock).mockReset().mockResolvedValue(undefined);
   client = new QueryClient();
   jest.spyOn(client, 'resumePausedMutations').mockResolvedValue(undefined);
 });
@@ -48,7 +53,7 @@ it('keeps device state for a signed-in user and resumes the queue after the owne
 });
 
 it('never throws', async () => {
-  (syncCacheOwner as jest.Mock).mockRejectedValueOnce(new Error('storage'));
+  (syncCacheOwner as jest.Mock).mockRejectedValue(new Error('storage'));
   (resetGeofencing as jest.Mock).mockRejectedValueOnce(new Error('native'));
   await expect(reconcileCacheOwner(client, null)).resolves.toBeUndefined();
   expect(client.resumePausedMutations).not.toHaveBeenCalled();
@@ -113,9 +118,40 @@ describe('session gate (F2)', () => {
     expect(isSessionOpen()).toBe(false);
   });
 
-  it('keeps the gate closed when the owner check fails', async () => {
-    (syncCacheOwner as jest.Mock).mockRejectedValueOnce(new Error('storage'));
+  it('retries the owner check and opens the gate when a retry succeeds (I-1)', async () => {
+    (syncCacheOwner as jest.Mock)
+      .mockRejectedValueOnce(new Error('storage'))
+      .mockResolvedValueOnce(undefined);
     await reconcileCacheOwner(client, 'u1');
+    expect(syncCacheOwner).toHaveBeenCalledTimes(2);
+    expect(clearUserCache).not.toHaveBeenCalled();
+    expect(isSessionOpen()).toBe(true);
+    expect(client.resumePausedMutations).toHaveBeenCalledTimes(1);
+  });
+
+  it('after 3 failed owner checks, wipes the (possibly foreign) cache and opens the gate (I-1)', async () => {
+    (syncCacheOwner as jest.Mock).mockRejectedValue(new Error('storage'));
+    let openWhenCleared: boolean | null = null;
+    (clearUserCache as jest.Mock).mockImplementationOnce(async () => {
+      openWhenCleared = isSessionOpen();
+    });
+    await reconcileCacheOwner(client, 'u1');
+    expect(syncCacheOwner).toHaveBeenCalledTimes(3);
+    expect(clearUserCache).toHaveBeenCalledWith(client);
+    expect(openWhenCleared).toBe(false); // 지운 뒤에만 연다
+    expect(isSessionOpen()).toBe(true);
+  });
+
+  it('a stale run never opens the gate after a newer run (M-1)', async () => {
+    let release!: () => void;
+    (syncCacheOwner as jest.Mock).mockImplementationOnce(
+      () => new Promise<void>((r) => (release = r))
+    );
+    const first = reconcileCacheOwner(client, 'u1');
+    await reconcileCacheOwner(client, null); // 그 사이 로그아웃
+    release();
+    await first;
     expect(isSessionOpen()).toBe(false);
+    expect(client.resumePausedMutations).not.toHaveBeenCalled();
   });
 });
