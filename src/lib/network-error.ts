@@ -2,7 +2,7 @@
 // 브라우저는 TypeError('Failed to fetch'), postgrest는 이를 { message: 'TypeError: …' }로 감싼다.
 // 우리 AbortSignal의 중단/시간 초과(AbortError, TimeoutError)도 포함한다.
 // 일반 TypeError(코드 버그)나 postgres 'statement timeout'(서버가 응답함)은 연결 오류가 아니다.
-const FETCH_FAILURE_RE = /network request failed|failed to fetch/i;
+const FETCH_FAILURE_RE = /network request failed|network request timed out|failed to fetch/i;
 const ABORT_RE = /^(AbortError|TimeoutError)\b/;
 const ABORT_NAMES = new Set(['AbortError', 'TimeoutError', 'AuthRetryableFetchError']);
 

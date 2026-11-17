@@ -44,3 +44,8 @@ describe('narrowed patterns (B7)', () => {
     expect(isNetworkError({ message: 'TypeError: Network request failed', code: '' })).toBe(true);
   });
 });
+
+it('treats "Network request timed out" (RN fetch timeout) as a network error (F3)', () => {
+  expect(isNetworkError(new TypeError('Network request timed out'))).toBe(true);
+  expect(isNetworkError({ message: 'TypeError: Network request timed out', code: '' })).toBe(true);
+});
