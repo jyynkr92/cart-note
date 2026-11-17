@@ -1,9 +1,16 @@
 import { AuthRetryableFetchError } from '@supabase/supabase-js';
-import { exchangeCodeFromUrl, parseAuthCode, signOut } from '@/src/auth/auth-api';
+import { exchangeCodeFromUrl, parseAuthCode, refreshSession, signOut } from '@/src/auth/auth-api';
 import { supabase } from '@/src/lib/supabase';
 
 jest.mock('@/src/lib/supabase', () => ({
-  supabase: { auth: { signOut: jest.fn(), exchangeCodeForSession: jest.fn(), setSession: jest.fn() } },
+  supabase: {
+    auth: {
+      signOut: jest.fn(),
+      exchangeCodeForSession: jest.fn(),
+      setSession: jest.fn(),
+      refreshSession: jest.fn(),
+    },
+  },
 }));
 
 beforeEach(() => jest.clearAllMocks());
@@ -74,5 +81,15 @@ describe('exchangeCodeFromUrl', () => {
     ).rejects.toThrow();
     expect(exchange()).not.toHaveBeenCalled();
     expect(supabase.auth.setSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('refreshSession (F6)', () => {
+  it('asks auth-js to refresh and never throws', async () => {
+    (supabase.auth.refreshSession as jest.Mock).mockResolvedValueOnce({ data: {}, error: null });
+    await expect(refreshSession()).resolves.toBeUndefined();
+    expect(supabase.auth.refreshSession).toHaveBeenCalledTimes(1);
+    (supabase.auth.refreshSession as jest.Mock).mockRejectedValueOnce(new TypeError('Network request failed'));
+    await expect(refreshSession()).resolves.toBeUndefined();
   });
 });

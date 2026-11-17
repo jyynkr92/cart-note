@@ -33,8 +33,9 @@ type Mode = 'regenerate' | 'leave' | 'name' | 'logout' | null;
 export default function Settings() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { session } = useAuth();
-  const userId = session?.user.id ?? null;
+  const { session, offlineUserId } = useAuth();
+  // 오프라인 사용자 모드(저장된 세션만 있음)에서도 내 id를 쓴다.
+  const userId = session?.user.id ?? offlineUserId;
   const { family, families, loading } = useCurrentGroup();
   const members = useFamilyMembers(family?.id ?? null);
   const { setFamilyId } = useCurrentGroupStore();

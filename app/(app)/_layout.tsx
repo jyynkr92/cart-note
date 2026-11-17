@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/src/auth/AuthProvider';
+import { refreshSession, signOut } from '@/src/auth/auth-api';
 import { useOpenPendingNotification } from '@/src/geofence/notification-route';
 import { useGeofenceSync } from '@/src/geofence/use-geofence-sync';
 import { useCurrentFamily, useFamilies } from '@/src/groups/use-groups';
 import { useIsOnline } from '@/src/lib/use-online';
+import { clearPendingInvite } from '@/src/onboarding/pending-invite';
 import { useOnboarding } from '@/src/onboarding/use-onboarding';
 import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';
 
@@ -41,8 +43,15 @@ export default function AppLayout() {
 
   if (offline) {
     return (
-      <View className="flex-1 items-center justify-center bg-background px-6">
+      <View className="flex-1 items-center justify-center gap-4 bg-background px-6">
         <Text>오프라인이라 확인할 수 없어요</Text>
+        {/* 세션만 기다리는 중이면 서버에 익명으로 묻지 않고 세션 복구를 시도한다. */}
+        <Button onPress={sessionPending ? () => void refreshSession() : retry}>
+          <Text>다시 시도</Text>
+        </Button>
+        <Button variant="ghost" onPress={() => void logoutFromWall()}>
+          <Text>로그아웃</Text>
+        </Button>
       </View>
     );
   }
@@ -68,6 +77,12 @@ export default function AppLayout() {
     default: // null(로딩), 'create-personal'(개인 그룹 생성 중)
       return <Loading />;
   }
+}
+
+/** 오프라인 화면에서 빠져나갈 길. 설정의 로그아웃과 같이 초대 대기 코드를 먼저 지우고 이 기기 세션만 끝낸다. */
+async function logoutFromWall(): Promise<void> {
+  await clearPendingInvite().catch(() => {});
+  await signOut().catch(() => {});
 }
 
 /** 모든 (app) 화면 위에 노출된다. NetInfo가 onlineManager를 갱신한다. */

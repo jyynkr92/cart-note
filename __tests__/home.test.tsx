@@ -24,9 +24,12 @@ jest.mock('@/src/lib/supabase', () => ({ supabase: {} }));
 jest.mock('@/src/lib/toast', () => ({ toast: { error: jest.fn() } }));
 jest.mock('@/src/items/item-api', () => ({}));
 jest.mock('@/src/realtime/use-family-realtime', () => ({ useFamilyRealtime: jest.fn() }));
-jest.mock('@/src/auth/AuthProvider', () => ({
-  useAuth: () => ({ session: { user: { id: 'u1' } }, loading: false }),
-}));
+let mockAuth: { session: unknown; loading: boolean; offlineUserId: string | null } = {
+  session: { user: { id: 'u1' } },
+  loading: false,
+  offlineUserId: null,
+};
+jest.mock('@/src/auth/AuthProvider', () => ({ useAuth: () => mockAuth }));
 jest.mock('@/src/onboarding/use-onboarding', () => ({
   useOnboarding: () => ({ step: 'ready', pendingInvite: null, error: false, retry: jest.fn() }),
 }));
@@ -137,6 +140,23 @@ describe('no group (e.g. creating the personal group failed after leaving the la
       ])
     );
     expect(await screen.findByText('우리집')).toBeTruthy();
+  });
+
+  it('uses the stored user id in offline-user mode for the retry (F6)', async () => {
+    mockAuth = { session: null, loading: false, offlineUserId: 'u9' };
+    try {
+      families.mockResolvedValue([]);
+      await renderWithClient(<Home />);
+      expect(await screen.findByText('그룹을 불러오지 못했어요')).toBeTruthy();
+      const spy = jest.spyOn(client, 'invalidateQueries');
+      await fireEvent.press(screen.getByText('다시 시도'));
+      expect(spy.mock.calls.map((c) => c[0])).toContainEqual({
+        queryKey: ['onboarding', 'u9'],
+        refetchType: 'all',
+      });
+    } finally {
+      mockAuth = { session: { user: { id: 'u1' } }, loading: false, offlineUserId: null };
+    }
   });
 
   it('keeps settings reachable', async () => {

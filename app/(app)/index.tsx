@@ -28,8 +28,9 @@ type NewKind = 'store' | 'online';
 export default function Home() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { session } = useAuth();
-  const userId = session?.user.id ?? null;
+  const { session, offlineUserId } = useAuth();
+  // 오프라인 사용자 모드(저장된 세션만 있음)에서도 내 id를 쓴다.
+  const userId = session?.user.id ?? offlineUserId;
   const { family, families, loading } = useCurrentGroup();
   const familyId = family?.id ?? null;
   const lists = useLists(familyId);

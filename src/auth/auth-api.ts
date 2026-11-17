@@ -21,6 +21,18 @@ export async function signOut(): Promise<void> {
   if (error && !isAuthRetryableFetchError(error)) throw error;
 }
 
+/**
+ * 저장된 refresh token으로 세션을 다시 받아 본다(오프라인 사용자 모드의 "다시 시도"). 성공하면 auth-js가
+ * TOKEN_REFRESHED를 보내 일반 흐름으로 돌아간다. 실패는 무시한다(여전히 오프라인). 절대 던지지 않는다.
+ */
+export async function refreshSession(): Promise<void> {
+  try {
+    await supabase.auth.refreshSession();
+  } catch {
+    // 무시
+  }
+}
+
 // PKCE 매직링크: `cartnote://auth?code=…`. 프래그먼트(#)가 붙은 링크는 암묵적 흐름의 토큰일 수 있으므로
 // 아예 받지 않는다. 남이 보낸 토큰으로 이 기기가 그 사람 계정에 로그인되는 것(세션 바꿔치기)을 막는다.
 const AUTH_LINK_RE = /^cartnote:\/\/auth\/?\?([^#]*)$/;

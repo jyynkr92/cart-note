@@ -38,8 +38,13 @@ jest.mock('@/src/onboarding/pending-invite', () => ({
   clearPendingInvite: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('@/src/items/item-api', () => ({}));
+let mockAuth: { session: unknown; loading: boolean; offlineUserId: string | null } = {
+  session: { user: { id: 'u1' } },
+  loading: false,
+  offlineUserId: null,
+};
 jest.mock('@/src/auth/AuthProvider', () => ({
-  useAuth: () => ({ session: { user: { id: 'u1' } }, loading: false }),
+  useAuth: () => mockAuth,
 }));
 jest.mock('@/src/auth/auth-api', () => ({ signOut: jest.fn() }));
 jest.mock('@/src/onboarding/profile-api', () => ({ updateDisplayName: jest.fn() }));
@@ -304,6 +309,16 @@ describe('changing my name', () => {
     await fireEvent.press(screen.getByText('내 이름 변경'));
     return screen.findByDisplayValue('은정');
   }
+
+  it('prefills my name from the stored user id in offline-user mode (F6)', async () => {
+    mockAuth = { session: null, loading: false, offlineUserId: 'u1' };
+    try {
+      const input = await open();
+      expect(input.props.value).toBe('은정');
+    } finally {
+      mockAuth = { session: { user: { id: 'u1' } }, loading: false, offlineUserId: null };
+    }
+  });
 
   it('blocks a whitespace-only name', async () => {
     const input = await open();

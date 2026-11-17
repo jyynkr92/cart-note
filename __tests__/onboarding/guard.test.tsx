@@ -4,7 +4,9 @@ import { act, render, screen, waitFor } from '@testing-library/react-native';
 import { StrictMode, type ReactElement } from 'react';
 import AppLayout from '@/app/(app)/_layout';
 import { createFamily, fetchMyFamilies } from '@/src/groups/group-api';
-import { getPendingInvite } from '@/src/onboarding/pending-invite';
+import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
+import { refreshSession, signOut } from '@/src/auth/auth-api';
+import { fireEvent } from '@testing-library/react-native';
 import { hasProfile } from '@/src/onboarding/profile-api';
 import { isOnboarded, markOnboarded } from '@/src/onboarding/onboarded-flag';
 import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';
@@ -41,7 +43,14 @@ jest.mock('@/src/groups/group-api', () => ({
   fetchMyFamilies: jest.fn(),
 }));
 jest.mock('@/src/realtime/use-family-realtime', () => ({ useFamilyRealtime: jest.fn() }));
-jest.mock('@/src/onboarding/pending-invite', () => ({ getPendingInvite: jest.fn() }));
+jest.mock('@/src/onboarding/pending-invite', () => ({
+  getPendingInvite: jest.fn(),
+  clearPendingInvite: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('@/src/auth/auth-api', () => ({
+  signOut: jest.fn().mockResolvedValue(undefined),
+  refreshSession: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('@/src/onboarding/profile-api', () => ({ hasProfile: jest.fn() }));
 jest.mock('@/src/geofence/use-geofence-sync', () => ({ useGeofenceSync: jest.fn() }));
 jest.mock('@/src/geofence/notification-route', () => ({ useOpenPendingNotification: jest.fn() }));
@@ -284,5 +293,49 @@ describe('session gate (F2)', () => {
     expect(hasProfile).not.toHaveBeenCalled();
     await act(async () => openSession('u1'));
     expect(await screen.findByText('READY')).toBeTruthy();
+  });
+});
+
+describe('offline wall actions (F6)', () => {
+  it('offers retry and sign-out on the offline wall', async () => {
+    set(true, null, 1);
+    onlineManager.setOnline(false);
+    await renderWithClient(<AppLayout />);
+    expect(await screen.findByText('오프라인이라 확인할 수 없어요')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '다시 시도' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '로그아웃' })).toBeTruthy();
+  });
+
+  it('retry refetches onboarding', async () => {
+    set(true, null, 1);
+    onlineManager.setOnline(false);
+    await renderWithClient(<AppLayout />);
+    await screen.findByText('오프라인이라 확인할 수 없어요');
+    const query = client.getQueryCache().find({ queryKey: qk.onboarding('u1') })!;
+    const fetch = jest.spyOn(query, 'fetch');
+    await fireEvent.press(screen.getByRole('button', { name: '다시 시도' }));
+    expect(fetch).toHaveBeenCalled();
+  });
+
+  it('sign-out clears the pending invite first, then signs out locally', async () => {
+    const order: string[] = [];
+    (clearPendingInvite as jest.Mock).mockImplementationOnce(async () => void order.push('clear'));
+    (signOut as jest.Mock).mockImplementationOnce(async () => void order.push('signOut'));
+    set(true, null, 1);
+    onlineManager.setOnline(false);
+    await renderWithClient(<AppLayout />);
+    await screen.findByText('오프라인이라 확인할 수 없어요');
+    await fireEvent.press(screen.getByRole('button', { name: '로그아웃' }));
+    await waitFor(() => expect(order).toEqual(['clear', 'signOut']));
+  });
+
+  it('in offline-user mode, retry tries to restore the session instead of asking the server anonymously', async () => {
+    mockAuth = { session: null, loading: false, offlineUserId: 'u1' };
+    set(true, null, 1);
+    await renderWithClient(<AppLayout />);
+    await screen.findByText('오프라인이라 확인할 수 없어요');
+    await fireEvent.press(screen.getByRole('button', { name: '다시 시도' }));
+    await waitFor(() => expect(refreshSession).toHaveBeenCalled());
+    expect(hasProfile).not.toHaveBeenCalled();
   });
 });
