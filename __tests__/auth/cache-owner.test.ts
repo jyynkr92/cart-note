@@ -4,9 +4,12 @@ import { reconcileCacheOwner } from '@/src/auth/signed-out-state';
 import { resetGeofencing } from '@/src/geofence/sync-geofences';
 import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { clearUserCache, syncCacheOwner } from '@/src/lib/query-client';
+import { toast } from '@/src/lib/toast';
+import { resetOwnerFallbackNoticeForTests } from '@/src/auth/signed-out-state';
 import { clearOnboarded } from '@/src/onboarding/onboarded-flag';
 import { isSessionOpen, openSession, resetSessionGateForTests } from '@/src/lib/session-gate';
 
+jest.mock('@/src/lib/toast', () => ({ toast: { error: jest.fn() } }));
 jest.mock('@/src/lib/supabase', () => ({ AUTH_STORAGE_KEY: 'test-auth', supabase: {} }));
 jest.mock('@/src/lib/query-client', () => ({
   syncCacheOwner: jest.fn().mockResolvedValue(undefined),
@@ -29,6 +32,7 @@ beforeEach(async () => {
   resetSessionGateForTests();
   (syncCacheOwner as jest.Mock).mockReset().mockResolvedValue(undefined);
   (clearUserCache as jest.Mock).mockReset().mockResolvedValue(undefined);
+  resetOwnerFallbackNoticeForTests();
   client = new QueryClient();
   jest.spyOn(client, 'resumePausedMutations').mockResolvedValue(undefined);
 });
@@ -153,5 +157,22 @@ describe('session gate (F2)', () => {
     await first;
     expect(isSessionOpen()).toBe(false);
     expect(client.resumePausedMutations).not.toHaveBeenCalled();
+  });
+});
+
+describe('owner unknown fallback notice (N-1)', () => {
+  it('tells the user once when queued changes were discarded', async () => {
+    (syncCacheOwner as jest.Mock).mockRejectedValue(new Error('io'));
+    client.getMutationCache().build(client, { mutationKey: ['m', 'items', 'delete'] });
+    await reconcileCacheOwner(client, 'u1');
+    expect(toast.error).toHaveBeenCalledWith('보내지 못한 변경을 지웠어요');
+    await reconcileCacheOwner(client, 'u1');
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays quiet when nothing was queued', async () => {
+    (syncCacheOwner as jest.Mock).mockRejectedValue(new Error('io'));
+    await reconcileCacheOwner(client, 'u1');
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

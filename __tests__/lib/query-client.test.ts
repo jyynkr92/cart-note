@@ -285,6 +285,48 @@ describe('privacy: persisted cache', () => {
     expect(client.getQueryData(qk.items('l1'))).toBeUndefined();
   });
 
+  describe('owner read vs write (N-1)', () => {
+    it('keeps the cache and queue for the same owner even when the owner write fails', async () => {
+      const client = createQueryClient();
+      await syncCacheOwner(client, 'u1');
+      client.setQueryData(qk.items('l1'), [item('a')]);
+      client.getMutationCache().build(client, { mutationKey: ['m', 'items', 'delete'] });
+      const setItem = jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('disk full'));
+      try {
+        await expect(syncCacheOwner(client, 'u1')).resolves.toBeUndefined();
+      } finally {
+        setItem.mockRestore();
+      }
+      expect(client.getQueryData(qk.items('l1'))).toBeDefined();
+      expect(client.getMutationCache().getAll()).toHaveLength(1);
+    });
+
+    it('still clears a different owner when the owner write fails', async () => {
+      const client = createQueryClient();
+      await syncCacheOwner(client, 'u1');
+      client.setQueryData(qk.items('l1'), [item('a')]);
+      const setItem = jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('disk full'));
+      try {
+        await expect(syncCacheOwner(client, 'u2')).resolves.toBeUndefined();
+      } finally {
+        setItem.mockRestore();
+      }
+      expect(client.getQueryData(qk.items('l1'))).toBeUndefined();
+    });
+
+    it('fails (owner unknown) only when the owner read fails', async () => {
+      const client = createQueryClient();
+      client.setQueryData(qk.items('l1'), [item('a')]);
+      const getItem = jest.spyOn(AsyncStorage, 'getItem').mockRejectedValueOnce(new Error('io'));
+      try {
+        await expect(syncCacheOwner(client, 'u1')).rejects.toThrow('io');
+      } finally {
+        getItem.mockRestore();
+      }
+      expect(client.getQueryData(qk.items('l1'))).toBeDefined(); // 읽지 못했으면 여기서는 지우지 않는다
+    });
+  });
+
   it('does not persist onboarding state', () => {
     const client = createQueryClient();
     client.setQueryData(qk.onboarding('u1'), { step: 'profile' });

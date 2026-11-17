@@ -87,9 +87,18 @@ export async function clearUserCache(client: QueryClient = queryClient): Promise
  * 복원이 끝난 뒤 호출해야 이전 사용자의 캐시가 되살아나지 않는다.
  */
 export async function syncCacheOwner(client: QueryClient, userId: string | null): Promise<void> {
+  // 읽기 실패만 던진다(소유자를 모름 → 호출부가 재시도/대체 처리). 기록 실패는 무시한다:
+  // 읽은 소유자가 현재 사용자면 캐시와 오프라인 큐가 이 사용자의 것이므로 지울 이유가 없다.
   const owner = await AsyncStorage.getItem(OWNER_KEY);
   // 로그아웃이거나 소유자가 현재 사용자가 아니면(소유자 기록이 없는 캐시 포함) 비운다.
   if (userId === null || owner !== userId) await clearUserCache(client);
-  if (userId) await AsyncStorage.setItem(OWNER_KEY, userId);
-  else await AsyncStorage.removeItem(OWNER_KEY);
+  try {
+    if (userId) {
+      if (owner !== userId) await AsyncStorage.setItem(OWNER_KEY, userId);
+    } else {
+      await AsyncStorage.removeItem(OWNER_KEY);
+    }
+  } catch {
+    // 다음 확인에서 다시 기록한다. 소유자 기록이 없으면 다음 확인이 캐시를 비우므로 남의 캐시가 남지 않는다.
+  }
 }

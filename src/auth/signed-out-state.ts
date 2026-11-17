@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { resetGeofencing } from '@/src/geofence/sync-geofences';
 import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { clearUserCache, syncCacheOwner } from '@/src/lib/query-client';
+import { toast } from '@/src/lib/toast';
 import { closeSession, openSession } from '@/src/lib/session-gate';
 import { clearOnboarded } from '@/src/onboarding/onboarded-flag';
 import { hasStoredSession } from './stored-session';
@@ -20,6 +21,14 @@ export async function clearSignedOutDeviceState(): Promise<void> {
 
 /** 소유자 확인 재시도 간격(총 3번 시도). */
 export const OWNER_CHECK_RETRY_DELAYS_MS = [100, 300];
+
+// 소유자를 몰라 대기 중인 변경을 지웠다는 안내는 앱 실행마다 한 번만 한다.
+let fallbackNoticeShown = false;
+
+/** 테스트용. */
+export function resetOwnerFallbackNoticeForTests(): void {
+  fallbackNoticeShown = false;
+}
 
 // reconcileCacheOwner 실행 세대. 늦게 끝난 이전 실행이 게이트를 열거나 큐를 재개하지 않게 한다.
 let generation = 0;
@@ -60,7 +69,16 @@ export async function reconcileCacheOwner(client: QueryClient, userId: string | 
 
   const owned = await syncOwnerWithRetry(client, userId);
   if (stale()) return;
-  if (!owned) await clearUserCache(client).catch(() => {});
+  if (!owned) {
+    // 소유자 기록을 읽지 못했다(재시도 후에도): 남의 것일 수 있는 캐시와 큐를 지운다.
+    // syncCacheOwner는 기록 실패로는 던지지 않으므로, 이 경로는 읽기 실패일 때만 온다.
+    const hadQueue = client.getMutationCache().getAll().length > 0;
+    await clearUserCache(client).catch(() => {});
+    if (hadQueue && userId !== null && !fallbackNoticeShown) {
+      fallbackNoticeShown = true;
+      toast.error('보내지 못한 변경을 지웠어요');
+    }
+  }
   if (stale()) return;
 
   if (userId === null) {
