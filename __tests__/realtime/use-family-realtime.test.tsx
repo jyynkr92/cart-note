@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';
+import * as applyChangeModule from '@/src/realtime/apply-change';
 import { supabase } from '@/src/lib/supabase';
 
 jest.mock('@/src/lib/supabase', () => ({
@@ -139,4 +140,13 @@ it('removes the channel on unmount and when the family changes', async () => {
   expect((supabase.channel as jest.Mock).mock.calls.at(-1)![0]).toMatch(/^family:f2:/);
   await unmount();
   expect(supabase.removeChannel).toHaveBeenCalledTimes(2);
+});
+
+it('cancels pending realtime work when the subscription is torn down (M-4)', async () => {
+  const cancel = jest.spyOn(applyChangeModule, 'cancelPendingRealtimeWork');
+  const { unmount } = await renderHook(() => useFamilyRealtime('f1'), { wrapper });
+  expect(cancel).not.toHaveBeenCalled();
+  await unmount();
+  expect(cancel).toHaveBeenCalledWith(client);
+  cancel.mockRestore();
 });

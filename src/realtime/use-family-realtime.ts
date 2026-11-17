@@ -3,7 +3,12 @@ import { useEffect } from 'react';
 import { mk } from '@/src/lib/query-keys';
 import { newId } from '@/src/lib/mutation-utils';
 import { supabase } from '@/src/lib/supabase';
-import { applyChange, REALTIME_INVALIDATE, type RealtimeTable } from './apply-change';
+import {
+  applyChange,
+  cancelPendingRealtimeWork,
+  REALTIME_INVALIDATE,
+  type RealtimeTable,
+} from './apply-change';
 
 const TABLES: RealtimeTable[] = ['items', 'lists', 'list_locations'];
 const IDLE_SKIP = new Set(['onboarding']);
@@ -51,6 +56,7 @@ export function useFamilyRealtime(familyId: string | null): void {
     });
     return () => {
       disposed = true;
+      cancelPendingRealtimeWork(qc);
       void supabase.removeChannel(channel);
     };
   }, [familyId, qc]);

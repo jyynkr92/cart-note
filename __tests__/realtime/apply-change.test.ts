@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import type { Item } from '@/src/items/item-api';
 import { qk } from '@/src/lib/query-keys';
-import { applyChange } from '@/src/realtime/apply-change';
+import { applyChange, cancelPendingRealtimeWork } from '@/src/realtime/apply-change';
 
 const item = (id: string, over: Partial<Item> = {}): Item => ({
   id,
@@ -322,4 +322,39 @@ it('passes cancelRefetch: false for every realtime invalidation (F1)', () => {
   applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
   expect(spy.mock.calls.length).toBeGreaterThan(5);
   for (const c of spy.mock.calls) expect(c[1]).toEqual({ cancelRefetch: false });
+});
+
+describe('uncached DELETE debounce limits (M-4)', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('fires at most 3s after the first event of a continuous burst', () => {
+    for (let t = 0; t < 10; t++) {
+      applyChange(qc, 'items', change('DELETE', null, { id: `x${t}` }));
+      jest.advanceTimersByTime(500); // 1초 디바운스가 계속 미뤄지는 폭주
+      if (t === 4) {
+        expect(spy).not.toHaveBeenCalled(); // 2.5초
+      }
+    }
+    // 첫 이벤트 후 3초 안에 한 번은 발화했다.
+    expect(keys().filter((k) => k[0] === 'lists').length).toBeGreaterThanOrEqual(1);
+    expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it('fires exactly at the 3s max wait', () => {
+    applyChange(qc, 'items', change('DELETE', null, { id: 'x0' }));
+    for (let t = 1; t <= 5; t++) {
+      jest.advanceTimersByTime(600);
+      if (t < 5) applyChange(qc, 'items', change('DELETE', null, { id: `x${t}` }));
+      if (t === 4) expect(spy).not.toHaveBeenCalled(); // 2.4초
+    }
+    expect(keys()).toEqual([['lists']]); // 3.0초
+  });
+
+  it('can be cancelled', () => {
+    applyChange(qc, 'items', change('DELETE', null, { id: 'x0' }));
+    cancelPendingRealtimeWork(qc);
+    jest.advanceTimersByTime(5000);
+    expect(spy).not.toHaveBeenCalled();
+  });
 });

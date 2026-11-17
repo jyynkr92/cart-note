@@ -15,21 +15,40 @@ function inv(qc: QueryClient, queryKey: readonly unknown[]) {
   void qc.invalidateQueries({ queryKey }, REALTIME_INVALIDATE);
 }
 
-/** 캐시에 없는 항목 DELETE는 필터 없이 모든 그룹에서 오므로, 홈 개수 갱신을 1초 트레일링으로 묶는다. */
+/**
+ * 캐시에 없는 항목 DELETE는 필터 없이 모든 그룹에서 오므로, 홈 개수 갱신을 1초 트레일링으로 묶는다.
+ * 이벤트가 계속 와도 첫 이벤트 후 최대 3초 안에는 한 번 발화한다.
+ */
 export const UNCACHED_DELETE_DEBOUNCE_MS = 1000;
-const pendingCounts = new WeakMap<QueryClient, ReturnType<typeof timeoutManager.setTimeout>>();
+export const UNCACHED_DELETE_MAX_WAIT_MS = 3000;
+type Pending = { timer: ReturnType<typeof timeoutManager.setTimeout>; firstAt: number };
+const pendingCounts = new WeakMap<QueryClient, Pending>();
 
 function refreshCountsSoon(qc: QueryClient) {
+  const now = Date.now();
   const prev = pendingCounts.get(qc);
-  if (prev !== undefined) timeoutManager.clearTimeout(prev);
-  pendingCounts.set(
-    qc,
-    timeoutManager.setTimeout(() => {
+  if (prev) timeoutManager.clearTimeout(prev.timer);
+  const firstAt = prev?.firstAt ?? now;
+  const delay = Math.max(
+    0,
+    Math.min(UNCACHED_DELETE_DEBOUNCE_MS, firstAt + UNCACHED_DELETE_MAX_WAIT_MS - now)
+  );
+  pendingCounts.set(qc, {
+    firstAt,
+    timer: timeoutManager.setTimeout(() => {
       pendingCounts.delete(qc);
       // 발화 시점에 큐가 바쁘면 건너뛴다(큐가 비면 invalidateWhenIdle이 맞춘다).
       if (!isBusy(qc)) inv(qc, ['lists']);
-    }, UNCACHED_DELETE_DEBOUNCE_MS)
-  );
+    }, delay),
+  });
+}
+
+/** 예약된 Realtime 후속 작업(개수 갱신)을 취소한다. 로그아웃/캐시 삭제와 구독 해제 때 부른다. */
+export function cancelPendingRealtimeWork(qc: QueryClient): void {
+  const prev = pendingCounts.get(qc);
+  if (!prev) return;
+  timeoutManager.clearTimeout(prev.timer);
+  pendingCounts.delete(qc);
 }
 
 /** 대기 중인 쓰기 mutation이 있으면 낙관적 값을 보호한다(큐가 비면 invalidateWhenIdle이 items/lists를 다시 맞춘다). */

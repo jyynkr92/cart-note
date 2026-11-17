@@ -18,6 +18,7 @@ import {
   syncCacheOwner,
 } from '@/src/lib/query-client';
 import { qk } from '@/src/lib/query-keys';
+import * as realtime from '@/src/realtime/apply-change';
 
 jest.mock('@/src/lib/supabase', () => ({ supabase: {} }));
 jest.mock('@/src/lib/toast', () => ({ toast: { error: jest.fn() } }));
@@ -230,6 +231,14 @@ describe('queue drain reconciliation', () => {
 });
 
 describe('privacy: persisted cache', () => {
+  it('clearUserCache cancels pending realtime work (M-4)', async () => {
+    const client = createQueryClient();
+    const cancel = jest.spyOn(realtime, 'cancelPendingRealtimeWork');
+    await clearUserCache(client);
+    expect(cancel).toHaveBeenCalledWith(client);
+    cancel.mockRestore();
+  });
+
   it('clearUserCache wipes memory and storage', async () => {
     const client = createQueryClient();
     client.setQueryData(qk.items('l1'), [item('secret')]);

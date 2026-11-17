@@ -11,6 +11,7 @@ import type { PersistQueryClientProviderProps } from '@tanstack/react-query-pers
 import { registerItemMutations } from '@/src/items/use-items';
 import { registerListMutations } from '@/src/lists/use-lists';
 import { registerLocationMutations } from '@/src/locations/use-locations';
+import { cancelPendingRealtimeWork } from '@/src/realtime/apply-change';
 import { queuedRetryDelay, shouldRetryQueued } from './queue-retry';
 import { setNetworkOnline } from './session-gate';
 
@@ -69,6 +70,8 @@ export function setupOnlineManager(): void {
 
 /** 로그아웃/계정 전환 시 메모리와 디스크 캐시(오프라인 큐 포함)를 모두 지운다. */
 export async function clearUserCache(client: QueryClient = queryClient): Promise<void> {
+  // 예약된 Realtime 개수 갱신이 지운 뒤에 다시 조회하지 않게 한다.
+  cancelPendingRealtimeWork(client);
   client.getMutationCache().clear();
   client.clear();
   await persister.removeClient();
