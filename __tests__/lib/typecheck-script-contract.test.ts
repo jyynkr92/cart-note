@@ -11,8 +11,7 @@
  * 줄이거나, 로컬에 남은 .expo/types나 `expo start`를 잠깐 띄워 만든 타입에 기대면 로컬에서는 통과하고
  * 새 체크아웃에서는 경로 검사가 꺼진다. .expo/types를 커밋하는 것도 답이 아니다(라우트가 바뀌면 낡는다).
  */
-import fs from 'fs';
-import path from 'path';
+import { fs, path } from '@/test-utils/node-fs';
 
 const ROOT = process.cwd();
 

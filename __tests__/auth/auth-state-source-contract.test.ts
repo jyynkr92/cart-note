@@ -12,8 +12,7 @@
  * 이 테스트가 잡지 못한다. 아래 learning을 본다.
  * 배경: docs/solutions/logic-errors/supabase-null-session-offline-is-not-signed-out.md
  */
-import fs from 'fs';
-import path from 'path';
+import { fs, path } from '@/test-utils/node-fs';
 
 const ROOT = process.cwd();
 

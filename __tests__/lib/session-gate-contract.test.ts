@@ -13,8 +13,7 @@
  * 새 mk 키의 기본값을 sessionGuarded 없이 등록하면 이 테스트가 실패한다.
  * 배경: docs/solutions/logic-errors/offline-queue-replay-gated-on-owner-verified-session.md
  */
-import fs from 'fs';
-import path from 'path';
+import { fs, path } from '@/test-utils/node-fs';
 import { createQueryClient } from '@/src/lib/query-client';
 import { mk } from '@/src/lib/query-keys';
 import {
