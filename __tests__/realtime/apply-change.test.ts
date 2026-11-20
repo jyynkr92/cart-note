@@ -1,0 +1,360 @@
+import { QueryClient } from '@tanstack/react-query';
+import type { Item } from '@/src/items/item-api';
+import { qk } from '@/src/lib/query-keys';
+import { applyChange, cancelPendingRealtimeWork } from '@/src/realtime/apply-change';
+
+const item = (id: string, over: Partial<Item> = {}): Item => ({
+  id,
+  list_id: 'l1',
+  family_id: 'f1',
+  name: id,
+  note: null,
+  is_done: false,
+  done_at: null,
+  sort_order: 0,
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  created_by: null,
+  ...over,
+});
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const change = (eventType: 'INSERT' | 'UPDATE' | 'DELETE', n: any, o: any = {}): any => ({
+  eventType,
+  new: n,
+  old: o,
+  schema: 'public',
+});
+
+let qc: QueryClient;
+let spy: jest.SpyInstance;
+beforeEach(() => {
+  qc = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity, retry: false } } });
+  spy = jest.spyOn(qc, 'invalidateQueries').mockResolvedValue(undefined);
+});
+afterEach(() => {
+  qc.clear();
+});
+
+const keys = () => spy.mock.calls.map((c) => c[0].queryKey);
+
+describe('items', () => {
+  it('INSERT adds to the list cache without duplicating the same id', () => {
+    qc.setQueryData(qk.items('l1'), [item('a')]);
+    applyChange(qc, 'items', change('INSERT', item('b')));
+    applyChange(qc, 'items', change('INSERT', item('b')));
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))!.map((i) => i.id)).toEqual(['a', 'b']);
+    expect(keys()).toContainEqual(qk.lists('f1'));
+  });
+
+  it('INSERT is a no-op for a list that is not cached', () => {
+    applyChange(qc, 'items', change('INSERT', item('b')));
+    expect(qc.getQueryData(qk.items('l1'))).toBeUndefined();
+  });
+
+  it('UPDATE replaces the cached item', () => {
+    qc.setQueryData(qk.items('l1'), [item('a')]);
+    applyChange(
+      qc,
+      'items',
+      change('UPDATE', item('a', { is_done: true, updated_at: '2026-01-02T00:00:00.000Z' }))
+    );
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))![0].is_done).toBe(true);
+  });
+
+  it('UPDATE with a changed list_id removes from the old list and adds to the new one', () => {
+    qc.setQueryData(qk.items('l1'), [item('a')]);
+    qc.setQueryData(qk.items('l2'), []);
+    applyChange(
+      qc,
+      'items',
+      change('UPDATE', item('a', { list_id: 'l2', updated_at: '2026-01-02T00:00:00.000Z' }))
+    );
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))).toEqual([]);
+    expect(qc.getQueryData<Item[]>(qk.items('l2'))!.map((i) => i.id)).toEqual(['a']);
+  });
+
+  it('UPDATE older than the cached updated_at is ignored', () => {
+    qc.setQueryData(qk.items('l1'), [
+      item('a', { name: 'new', updated_at: '2026-01-05T00:00:00.000Z' }),
+    ]);
+    applyChange(
+      qc,
+      'items',
+      change('UPDATE', item('a', { name: 'stale', updated_at: '2026-01-02T00:00:00.000Z' }))
+    );
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))![0].name).toBe('new');
+  });
+
+  it('a cached item without updated_at loses to the server echo', () => {
+    const optimistic = { ...item('a', { name: 'opt' }), updated_at: undefined } as unknown as Item;
+    qc.setQueryData(qk.items('l1'), [optimistic]);
+    applyChange(qc, 'items', change('UPDATE', item('a', { name: 'server' })));
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))![0].name).toBe('server');
+  });
+
+  it('DELETE never edits the cache, only invalidates prefixes', () => {
+    qc.setQueryData(qk.items('l1'), [item('a')]);
+    applyChange(qc, 'items', change('DELETE', null, { id: 'a' }));
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))!.map((i) => i.id)).toEqual(['a']);
+    expect(keys()).toEqual(expect.arrayContaining([['items'], ['lists']]));
+  });
+});
+
+describe('items while a mutation is pending', () => {
+  beforeEach(() => {
+    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
+  });
+
+  it('UPDATE leaves the optimistic cache alone and skips invalidation', () => {
+    qc.setQueryData(qk.items('l1'), [item('a', { is_done: true })]);
+    applyChange(
+      qc,
+      'items',
+      change('UPDATE', item('a', { is_done: false, updated_at: '2026-02-01T00:00:00.000Z' }))
+    );
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))![0].is_done).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('INSERT is skipped', () => {
+    qc.setQueryData(qk.items('l1'), [item('a')]);
+    applyChange(qc, 'items', change('INSERT', item('b')));
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))).toHaveLength(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('DELETE and lists events do not invalidate items/lists', () => {
+    applyChange(qc, 'items', change('DELETE', null, { id: 'a' }));
+    applyChange(qc, 'lists', change('UPDATE', { id: 'l1', family_id: 'f1' }));
+    applyChange(qc, 'lists', change('DELETE', null, { id: 'l1' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('list_locations only invalidates allLocations (the rest waits for the idle sweep)', () => {
+    applyChange(
+      qc,
+      'list_locations',
+      change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' })
+    );
+    expect(keys()).toEqual([qk.allLocations()]);
+  });
+});
+
+describe('ordering', () => {
+  it('inserts into created_at order', () => {
+    qc.setQueryData(qk.items('l1'), [
+      item('a', { created_at: '2026-01-01T00:00:00.000Z' }),
+      item('c', { created_at: '2026-01-03T00:00:00.000Z' }),
+    ]);
+    applyChange(
+      qc,
+      'items',
+      change('INSERT', item('b', { created_at: '2026-01-02T00:00:00.000Z' }))
+    );
+    expect(qc.getQueryData<Item[]>(qk.items('l1'))!.map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('lists', () => {
+  it('INSERT/UPDATE invalidate qk.lists(family_id)', () => {
+    applyChange(qc, 'lists', change('UPDATE', { id: 'l1', family_id: 'f1' }));
+    expect(keys()).toEqual([qk.lists('f1')]);
+  });
+
+  it('DELETE invalidates the lists prefix only', () => {
+    qc.setQueryData(qk.lists('f1'), [{ id: 'l1' }]);
+    applyChange(qc, 'lists', change('DELETE', null, { id: 'l1' }));
+    expect(keys()).toEqual([['lists']]);
+    expect(qc.getQueryData(qk.lists('f1'))).toEqual([{ id: 'l1' }]);
+  });
+});
+
+describe('list_locations', () => {
+  it('INSERT/UPDATE invalidate locations(list_id), allLocations and the lists', () => {
+    applyChange(
+      qc,
+      'list_locations',
+      change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' })
+    );
+    expect(keys()).toEqual(
+      expect.arrayContaining([qk.locations('l1'), qk.allLocations(), qk.lists('f1')])
+    );
+  });
+
+  it('DELETE invalidates the prefixes', () => {
+    qc.setQueryData(qk.locations('l1'), [{ id: 'x', list_id: 'l1' }]);
+    applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
+    expect(keys()).toEqual(expect.arrayContaining([['locations'], qk.allLocations(), ['lists']]));
+  });
+});
+
+describe('list_locations while mutations are busy', () => {
+  const busy = () => {
+    // 진행 중인 mutation 하나를 흉내 낸다.
+    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
+  };
+
+  it('INSERT/UPDATE skip locations(list_id) and lists, but still invalidate allLocations', () => {
+    busy();
+    applyChange(qc, 'list_locations', change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' }));
+    expect(keys()).toEqual([qk.allLocations()]);
+  });
+
+  it('DELETE skips the locations/lists prefixes, but still invalidates allLocations', () => {
+    busy();
+    qc.setQueryData(qk.allLocations(), [{ id: 'x', list_id: 'l1' }]);
+    applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
+    expect(keys()).toEqual([qk.allLocations()]);
+  });
+});
+
+// DELETE는 family_id 필터를 걸 수 없어 다른 그룹의 삭제도 모두 온다. 캐시에 없는 행이면 무시한다(R2/A5).
+describe('DELETE events for rows that are not cached', () => {
+  beforeEach(() => {
+    qc.setQueryData(qk.items('l1'), [item('a')]);
+    qc.setQueryData(qk.lists('f1'), [{ id: 'l1' }]);
+    qc.setQueryData(qk.locations('l1'), [{ id: 'x', list_id: 'l1' }]);
+    qc.setQueryData(qk.allLocations(), [{ id: 'y', list_id: 'l2' }]);
+  });
+
+  it('items: an uncached id only refreshes the home counts, once per burst (B4, F1)', () => {
+    jest.useFakeTimers();
+    try {
+      for (const id of ['x1', 'x2', 'x3']) applyChange(qc, 'items', change('DELETE', null, { id }));
+      expect(spy).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(999);
+      applyChange(qc, 'items', change('DELETE', null, { id: 'x4' })); // 트레일링: 다시 1초 미룬다
+      jest.advanceTimersByTime(999);
+      expect(spy).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(1);
+      expect(keys()).toEqual([['lists']]);
+      expect(spy.mock.calls[0][1]).toEqual({ cancelRefetch: false });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('items: an uncached id does nothing while the queue is busy (B4, F1)', () => {
+    jest.useFakeTimers();
+    try {
+      applyChange(qc, 'items', change('DELETE', null, { id: 'other-group-item' }));
+      jest.spyOn(qc, 'isMutating').mockReturnValue(1); // 발화 시점에 바쁘면 건너뛴다
+      jest.advanceTimersByTime(1000);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('lists: ignores an id that is in no lists cache', () => {
+    applyChange(qc, 'lists', change('DELETE', null, { id: 'other-group-list' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('list_locations: ignores an id that is in neither locations nor allLocations', () => {
+    applyChange(qc, 'list_locations', change('DELETE', null, { id: 'other-group-loc' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('ignores a DELETE without an old id', () => {
+    applyChange(qc, 'lists', change('DELETE', null, {}));
+    applyChange(qc, 'list_locations', change('DELETE', null, {}));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('list_locations: a row only in allLocations still counts as cached', () => {
+    applyChange(qc, 'list_locations', change('DELETE', null, { id: 'y' }));
+    expect(keys()).toEqual(expect.arrayContaining([['locations'], qk.allLocations(), ['lists']]));
+  });
+
+  it('a cached id still respects the busy guard', () => {
+    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
+    applyChange(qc, 'items', change('DELETE', null, { id: 'a' }));
+    applyChange(qc, 'lists', change('DELETE', null, { id: 'l1' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// B4: 조회가 진행 중이면 그 결과에 삭제된 행이 섞여 들어올 수 있다 → 캐시에 없어도 무시하지 않고 무효화한다.
+describe('uncached DELETE while a fetch for that cache is in flight (B4)', () => {
+  const fetching = (prefix: string) =>
+    jest
+      .spyOn(qc, 'isFetching')
+      .mockImplementation((f?: { queryKey?: readonly unknown[] }) =>
+        f?.queryKey?.[0] === prefix ? 1 : 0
+      );
+
+  it('items: invalidates items and lists', () => {
+    fetching('items');
+    applyChange(qc, 'items', change('DELETE', null, { id: 'new-row' }));
+    expect(keys()).toEqual(expect.arrayContaining([['items'], ['lists']]));
+  });
+
+  it('lists: invalidates lists', () => {
+    fetching('lists');
+    applyChange(qc, 'lists', change('DELETE', null, { id: 'new-list' }));
+    expect(keys()).toEqual([['lists']]);
+  });
+
+  it('list_locations: invalidates when allLocations is being fetched', () => {
+    fetching('allLocations');
+    applyChange(qc, 'list_locations', change('DELETE', null, { id: 'new-loc' }));
+    expect(keys()).toEqual(expect.arrayContaining([['locations'], qk.allLocations(), ['lists']]));
+  });
+
+  it('still respects the busy guard for items/lists', () => {
+    fetching('items');
+    jest.spyOn(qc, 'isMutating').mockReturnValue(1);
+    applyChange(qc, 'items', change('DELETE', null, { id: 'new-row' }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// F1: Realtime이 일으키는 무효화는 진행 중인 조회를 취소하고 다시 시작하지 않는다.
+it('passes cancelRefetch: false for every realtime invalidation (F1)', () => {
+  qc.setQueryData(qk.items('l1'), [item('a')]);
+  qc.setQueryData(qk.locations('l1'), [{ id: 'x', list_id: 'l1' }]);
+  applyChange(qc, 'items', change('INSERT', item('b')));
+  applyChange(qc, 'items', change('DELETE', null, { id: 'a' }));
+  applyChange(qc, 'lists', change('UPDATE', { id: 'l1', family_id: 'f1' }));
+  applyChange(qc, 'list_locations', change('INSERT', { id: 'y', list_id: 'l1', family_id: 'f1' }));
+  applyChange(qc, 'list_locations', change('DELETE', null, { id: 'x' }));
+  expect(spy.mock.calls.length).toBeGreaterThan(5);
+  for (const c of spy.mock.calls) expect(c[1]).toEqual({ cancelRefetch: false });
+});
+
+describe('uncached DELETE debounce limits (M-4)', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('fires at most 3s after the first event of a continuous burst', () => {
+    for (let t = 0; t < 10; t++) {
+      applyChange(qc, 'items', change('DELETE', null, { id: `x${t}` }));
+      jest.advanceTimersByTime(500); // 1초 디바운스가 계속 미뤄지는 폭주
+      if (t === 4) {
+        expect(spy).not.toHaveBeenCalled(); // 2.5초
+      }
+    }
+    // 첫 이벤트 후 3초 안에 한 번은 발화했다.
+    expect(keys().filter((k) => k[0] === 'lists').length).toBeGreaterThanOrEqual(1);
+    expect(spy.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it('fires exactly at the 3s max wait', () => {
+    applyChange(qc, 'items', change('DELETE', null, { id: 'x0' }));
+    for (let t = 1; t <= 5; t++) {
+      jest.advanceTimersByTime(600);
+      if (t < 5) applyChange(qc, 'items', change('DELETE', null, { id: `x${t}` }));
+      if (t === 4) expect(spy).not.toHaveBeenCalled(); // 2.4초
+    }
+    expect(keys()).toEqual([['lists']]); // 3.0초
+  });
+
+  it('can be cancelled', () => {
+    applyChange(qc, 'items', change('DELETE', null, { id: 'x0' }));
+    cancelPendingRealtimeWork(qc);
+    jest.advanceTimersByTime(5000);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
