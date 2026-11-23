@@ -165,6 +165,24 @@ describe('Sheet', () => {
     expect(screen.queryByText('내용')).toBeNull();
   });
 
+  it('shows the content it had when the close started until the close finishes (mock models the library)', async () => {
+    const sheet = (open: boolean, label: string) => (
+      <Sheet open={open} onOpenChange={jest.fn()}>
+        <Text>{label}</Text>
+      </Sheet>
+    );
+    const { rerender } = await render(sheet(true, '열린 내용'));
+    const release = holdSheetDismissals();
+    await rerender(sheet(false, '닫힌 뒤 내용'));
+    // 닫는 렌더에서 바뀐 내용이 그대로 남는다(라이브러리는 닫는 중 내용 갱신을 멈춘다).
+    expect(screen.getByText('닫힌 뒤 내용')).toBeTruthy();
+    await rerender(sheet(false, '그 뒤 내용'));
+    expect(screen.getByText('닫힌 뒤 내용')).toBeTruthy();
+    expect(screen.queryByText('그 뒤 내용')).toBeNull();
+    await release();
+    expect(screen.queryByText(/내용/)).toBeNull();
+  });
+
   it('a user dismiss followed by the parent closing still counts the next user dismiss', async () => {
     const onOpenChange = jest.fn();
     const sheet = (open: boolean) => (

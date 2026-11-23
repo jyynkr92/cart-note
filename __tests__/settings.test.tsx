@@ -23,6 +23,7 @@ import { clearPendingInvite } from '@/src/onboarding/pending-invite';
 import { createQueryClient } from '@/src/lib/query-client';
 import { qk } from '@/src/lib/query-keys';
 import { updateDisplayName } from '@/src/onboarding/profile-api';
+import { closingSheetCount, holdSheetDismissals } from '@/test-utils/bottom-sheet';
 import { disposeClient } from '@/test-utils/dispose-client';
 
 const mockReplace = jest.fn();
@@ -349,6 +350,20 @@ describe('group management', () => {
     await fireEvent.changeText(input, '  우리 집  ');
     await fireEvent.press(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(renameFamily).toHaveBeenCalledWith('g1', '우리 집'));
+  });
+
+  it('keeps the rename title while the sheet closes after saving', async () => {
+    (renameFamily as jest.Mock).mockResolvedValue(undefined);
+    await ready();
+    await fireEvent.press(screen.getByText('그룹 이름 변경'));
+    await fireEvent.changeText(await screen.findByDisplayValue('우리집'), '우리 집');
+    const release = holdSheetDismissals();
+    await fireEvent.press(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(closingSheetCount()).toBe(1));
+    expect(screen.getByRole('header', { name: '그룹 이름 변경' })).toBeTruthy();
+    expect(screen.queryByRole('header', { name: '새 그룹' })).toBeNull();
+    await release();
+    expect(screen.queryByRole('header', { name: '그룹 이름 변경' })).toBeNull();
   });
 
   it('blocks a whitespace-only group name', async () => {

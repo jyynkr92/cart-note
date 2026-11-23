@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { ItemEditSheet } from '@/src/items/ItemEditSheet';
+import { holdSheetDismissals } from '@/test-utils/bottom-sheet';
 import type { Item } from '@/src/items/item-api';
 
 const base = {
@@ -30,5 +31,16 @@ describe('ItemEditSheet', () => {
     await fireEvent.changeText(screen.getByDisplayValue('A 메모'), '  새 메모 ');
     await fireEvent.press(screen.getByRole('button', { name: '저장' }));
     expect(onSave).toHaveBeenCalledWith({ id: 'a', name: '새 이름', note: '새 메모' });
+  });
+
+  it('keeps showing the item while the sheet closes', async () => {
+    const { rerender } = await render(
+      <ItemEditSheet item={itemA} onClose={jest.fn()} onSave={jest.fn()} />
+    );
+    const release = holdSheetDismissals();
+    await rerender(<ItemEditSheet item={null} onClose={jest.fn()} onSave={jest.fn()} />);
+    expect(screen.getByDisplayValue('A 이름')).toBeTruthy();
+    await release();
+    expect(screen.queryByDisplayValue('A 이름')).toBeNull();
   });
 });

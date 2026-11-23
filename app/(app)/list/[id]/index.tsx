@@ -10,6 +10,7 @@ import {
   SheetHeader,
   SheetInput,
   SheetTitle,
+  useLastWhileOpen,
 } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
@@ -89,6 +90,13 @@ export default function ListDetail() {
     return () => sub.remove();
   }, [selection.active, clearSelection]);
 
+  // 현재 목록에 실제로 있는 항목만 보낸다.
+  const selectedIds = (items.data ?? [])
+    .filter((i) => selection.selected.has(i.id))
+    .map((i) => i.id);
+  // 삭제를 확인하면 선택을 비우며 시트를 닫는다. 닫는 동안에는 확인했던 개수를 보인다.
+  const deleteCount = useLastWhileOpen(selectedIds.length, mode === 'deleteSelected');
+
   const goHome = () => router.replace('/');
   const wrap = (children: React.ReactNode) => (
     <View className="flex-1 bg-background px-4" style={{ paddingTop }}>
@@ -139,10 +147,6 @@ export default function ListDetail() {
     setText('');
   }
 
-  // 현재 목록에 실제로 있는 항목만 보낸다.
-  const selectedIds = (items.data ?? [])
-    .filter((i) => selection.selected.has(i.id))
-    .map((i) => i.id);
   const moveTargets = (lists.data ?? []).filter((l) => l.id !== listId);
 
   function confirmMove(toListId: string) {
@@ -175,10 +179,10 @@ export default function ListDetail() {
   }
 
   function confirmDelete() {
+    setMode(null);
     if (!familyId) return;
     setDeleting(true);
     deleteList.mutate({ id: listId, familyId });
-    setMode(null);
     goHome();
   }
 
@@ -333,7 +337,7 @@ export default function ListDetail() {
       <ConfirmSheet
         open={mode === 'deleteSelected'}
         title="항목 삭제"
-        description={`${selectedIds.length}개 항목을 삭제할까요?`}
+        description={`${deleteCount}개 항목을 삭제할까요?`}
         confirmLabel="삭제"
         destructive
         onConfirm={confirmDeleteSelected}

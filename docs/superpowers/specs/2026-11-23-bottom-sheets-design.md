@@ -106,7 +106,7 @@ Cart Note는 모바일 앱인데, 입력·확인 창은 화면 가운데 뜨는 
 5. **닫기 콜백은 한 번만.** `Sheet`의 `onDismiss`에서는 부모의 `open`이 아직 true일 때만 `onOpenChange(false)`를 부른다(최신 `open`을 ref로 본다). 코드가 `open=false`로 닫은 경우에는 부르지 않는다. `ConfirmSheet`는 확인을 누르면 ref에 "확인됨"을 기록한다. 그 뒤의 dismiss에서는 `onCancel`을 부르지 않는다. 다음 경우를 테스트로 고정한다.
    - `join.tsx`에서 `삭제`를 누르면 `answer(true)`만 한 번 불린다(`answer(false)`가 뒤따르지 않는다).
    - 끌어 닫으면 `answer(false)`가 한 번만 불린다.
-6. **닫는 동안의 내용.** `open`이 false가 되어도 닫는 애니메이션이 끝날 때(`onDismiss`)까지 children을 유지한다. 그 뒤에 지운다. 목에서는 바로 지워진다. `ItemEditSheet`는 `key={item.id}`를 그대로 둔다.
+6. **닫는 동안의 내용.** `open`이 false가 되어도 닫는 애니메이션이 끝날 때(`onDismiss`)까지 children을 유지한다. 그 뒤에 지운다. 목에서는 바로 지워진다. `ItemEditSheet`는 `key={item.id}`를 그대로 둔다. 라이브러리는 닫는 중에 내용 갱신을 멈추므로, 시트를 닫는 렌더에서 내용의 근거(편집 대상·개수·모드)를 바꾸는 호출부는 `useLastWhileOpen`으로 닫기 전 값을 보인다. 목도 `holdSheetDismissals()`로 미룬 닫기 동안에는 dismiss 때의 children을 그대로 그린다.
 7. **역할(role)과 이름.**
    - `MenuSheet` 항목은 지금처럼 `accessibilityRole="menuitem"`이다. 기존 테스트가 `findByRole('menuitem', …)`과 `toBeDisabled()`를 쓴다.
    - 트리거는 `button`이고, 받은 `accessibilityLabel`(예: `목록 메뉴`)을 그대로 쓴다.

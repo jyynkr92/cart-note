@@ -125,6 +125,17 @@ function Sheet({ open, onOpenChange, children, onClosed }: SheetProps) {
   );
 }
 
+/**
+ * 시트가 열려 있으면 value를, 닫혀 있으면 마지막으로 열려 있던 때의 value를 돌려준다.
+ * 시트를 닫는 같은 렌더에서 내용의 근거(편집 대상, 개수, 모드)가 바뀌어도
+ * 닫는 애니메이션 동안 닫기 전 내용을 보이게 한다(라이브러리는 닫는 중에 내용 갱신을 멈춘다).
+ */
+function useLastWhileOpen<T>(value: T, open: boolean): T {
+  const [last, setLast] = React.useState(value);
+  if (open && !Object.is(last, value)) setLast(value);
+  return open ? value : last;
+}
+
 type SheetPartProps = { className?: string; children: React.ReactNode };
 
 function SheetHeader({ className, children }: SheetPartProps) {
@@ -317,5 +328,6 @@ export {
   SheetHeader,
   SheetInput,
   SheetTitle,
+  useLastWhileOpen,
 };
 export type { MenuSheetItem };

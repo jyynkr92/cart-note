@@ -6,6 +6,7 @@ import {
   SheetHeader,
   SheetInput,
   SheetTitle,
+  useLastWhileOpen,
 } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
@@ -19,9 +20,12 @@ type Props = {
 
 /** 항목 이름/메모 편집. item이 null이면 닫혀 있다. */
 export function ItemEditSheet({ item, onClose, onSave }: Props) {
+  const open = item !== null;
+  // 닫는 동안에는 닫기 전 항목을 그대로 보인다.
+  const shown = useLastWhileOpen(item, open);
   return (
-    <Sheet open={item !== null} onOpenChange={(o) => !o && onClose()}>
-      {item ? <EditForm key={item.id} item={item} onSave={onSave} /> : null}
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      {shown ? <EditForm key={shown.id} item={shown} onSave={onSave} /> : null}
     </Sheet>
   );
 }

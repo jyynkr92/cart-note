@@ -1,7 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type ReactElement } from 'react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetFooter, SheetHeader, SheetInput, SheetTitle } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetFooter,
+  SheetHeader,
+  SheetInput,
+  SheetTitle,
+  useLastWhileOpen,
+} from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 import { qk } from '@/src/lib/query-keys';
 import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
@@ -29,6 +36,8 @@ export function useGroupNameDialog(family: Family | null): {
   const inFlight = useRef(false);
 
   const trimmed = normalizeName(name);
+  // 저장해서 닫는 동안 제목이 '새 그룹'으로 바뀌지 않게 닫기 전 모드를 보인다.
+  const shownMode = useLastWhileOpen(mode, mode !== null);
 
   function open(next: GroupNameMode) {
     setName(next === 'rename' ? (family?.name ?? '') : '');
@@ -60,7 +69,7 @@ export function useGroupNameDialog(family: Family | null): {
   const dialog = (
     <Sheet open={mode !== null} onOpenChange={(o) => !o && setMode(null)}>
       <SheetHeader>
-        <SheetTitle>{mode === 'rename' ? '그룹 이름 변경' : '새 그룹'}</SheetTitle>
+        <SheetTitle>{shownMode === 'rename' ? '그룹 이름 변경' : '새 그룹'}</SheetTitle>
       </SheetHeader>
       <SheetInput
         placeholder="그룹 이름"
