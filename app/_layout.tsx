@@ -6,7 +6,6 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { useEffect } from 'react';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { PortalHost } from '@rn-primitives/portal';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -84,7 +83,6 @@ export default function RootLayout() {
               <RootNavigator />
             </AuthProvider>
           </PersistQueryClientProvider>
-          <PortalHost />
           <ToastHost />
         </ThemeProvider>
       </BottomSheetModalProvider>

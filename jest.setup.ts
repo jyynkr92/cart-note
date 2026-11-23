@@ -52,18 +52,6 @@ afterEach(() => {
   (globalThis as { __resetBottomSheetMock?: () => void }).__resetBottomSheetMock?.();
 });
 
-// 드롭다운은 트리거를 measure한 뒤에야 내용을 그린다. Jest의 View는 measure가 no-op이라 값을 채워 준다.
-let originalMeasure: unknown;
-beforeAll(() => {
-  const { View } = require('react-native');
-  originalMeasure = View.prototype.measure;
-  View.prototype.measure = (cb: (...n: number[]) => void) => cb(0, 0, 100, 40, 0, 0);
-});
-afterAll(() => {
-  const { View } = require('react-native');
-  View.prototype.measure = originalMeasure;
-});
-
 // expo-clipboard는 네이티브 모듈이라 Jest에서는 대체한다.
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn().mockResolvedValue(true) }));
 
