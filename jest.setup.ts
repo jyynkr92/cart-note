@@ -1,3 +1,6 @@
+import { timeoutManager } from '@tanstack/react-query';
+import { getVerifiedUserId, installSessionCheck, openSession } from '@/src/lib/session-gate';
+
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
@@ -6,8 +9,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('expo-crypto', () => ({ randomUUID: () => require('crypto').randomUUID() }));
 
 // TanStack Query의 gc/재시도 타이머(최대 7일)가 Jest 프로세스 종료를 막지 않도록 unref한다.
-import { timeoutManager } from '@tanstack/react-query';
-const unref = <T,>(t: T): T => {
+const unref = <T>(t: T): T => {
   (t as { unref?: () => void }).unref?.();
   return t;
 };
@@ -36,8 +38,9 @@ jest.mock(
   () => new Proxy({ __esModule: true }, { get: (t, k) => (k in t ? (t as any)[k] : () => null) })
 );
 jest.mock('react-native-screens', () => ({ FullWindowOverlay: ({ children }: any) => children }));
-jest.mock('react-native-safe-area-context', () =>
-  require('react-native-safe-area-context/jest/mock').default
+jest.mock(
+  'react-native-safe-area-context',
+  () => require('react-native-safe-area-context/jest/mock').default
 );
 
 // 드롭다운은 트리거를 measure한 뒤에야 내용을 그린다. Jest의 View는 measure가 no-op이라 값을 채워 준다.
@@ -85,6 +88,5 @@ jest.mock('expo-notifications', () => ({
 
 // 세션 게이트는 기본이 "세션 없음"(fail closed)이다. 테스트에서는 테스트 사용자로 게이트를 열고, 세션 확인은
 // 게이트를 연 사용자를 돌려준다(세션 게이트 동작은 __tests__/lib/session-gate.test.ts가 직접 설치해 검증한다).
-import { getVerifiedUserId, installSessionCheck, openSession } from '@/src/lib/session-gate';
 openSession('jest-user');
 installSessionCheck(async () => getVerifiedUserId());

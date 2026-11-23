@@ -12,7 +12,7 @@ jest.mock('@/src/lib/supabase', () => ({
 type Handler = (p: unknown) => void;
 let statusCb: (s: string) => void;
 let handlers: { filter: { event: string; table: string; filter?: string }; cb: Handler }[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const channel: any = {
   on: jest.fn((_t: string, filter: never, cb: Handler) => {
     handlers.push({ filter, cb });

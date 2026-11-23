@@ -105,8 +105,20 @@ EAS 빌드를 쓰려면 `eas.json`에 `developmentClient: true`인 development �
 | 테스트 | `npm test` |
 | 타입 검사 | `npm run typecheck` |
 | DB 테스트 (pgTAP, 로컬 Supabase 실행 중이어야 함) | `npx supabase test db` |
+| 린트 (ESLint, `eslint-config-expo`) | `npm run lint` |
+| JS 번들 빌드 (iOS/Android, `dist/`에 출력) | `npm run build` |
+| 운영 의존성 보안 점검 (high 이상이면 실패) | `npm run audit:prod` |
 
 `npm run typecheck`는 먼저 `expo customize tsconfig.json`을 실행한 뒤 `tsc --noEmit`을 돌린다. typed routes 타입은 `.expo/types`에서 오며, 이 단계(또는 개발 서버 `npx expo start`)가 생성한다. 이 단계를 빼면 `Href`가 느슨한 타입으로 돌아가 잘못된 경로도 타입 검사를 통과하므로 지우지 않는다. 이 디렉터리는 커밋하지 않는다.
+
+## CI
+
+`.github/workflows/ci.yml`이 PR과 `main` push마다 두 job을 돌린다.
+
+- `checks`: `npm ci` → 린트 → 타입 검사 → 테스트 → 번들 빌드 → `audit:prod`
+- `db`: `npx supabase db start`로 Postgres만 띄우고 `npx supabase test db`
+
+린트에서 React Compiler 규칙(`react-hooks/refs`, `react-hooks/set-state-in-effect`)은 경고로만 둔다. 이 앱은 컴파일러를 켜지 않았고, 걸리는 곳은 의도된 패턴이다.
 
 ## 문서
 

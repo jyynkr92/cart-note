@@ -5,7 +5,6 @@ import { mk, qk } from '@/src/lib/query-keys';
 
 export type RealtimeTable = 'items' | 'lists' | 'list_locations';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
 
 /** Realtime이 일으키는 무효화는 진행 중인 조회를 취소하고 다시 시작하지 않는다(이벤트 폭주 시 재조회 연쇄 방지). */

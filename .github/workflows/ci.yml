@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # PR은 새 push가 오면 이전 실행을 취소한다. main은 커밋마다 결과가 남도록 취소하지 않는다.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: lint · typecheck · test · build · audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # 번들에 들어가는 공개 값이다. CI는 실제 서버에 붙지 않으므로 로컬 기본값을 쓴다.
+      EXPO_PUBLIC_SUPABASE_URL: http://127.0.0.1:55321
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --ci
+      - run: npm run build
+      # 운영 의존성(dependencies)의 high 이상만 실패로 본다. moderate(현재 expo·jest의 glob/minimatch 체인)는 막지 않는다.
+      - run: npm run audit:prod
+
+  db:
+    name: database tests (pgTAP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # DB 테스트에는 Postgres만 있으면 된다. 마이그레이션은 시작할 때 적용된다.
+      - run: npx supabase db start
+      - run: npx supabase test db
