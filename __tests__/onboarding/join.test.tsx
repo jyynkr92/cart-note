@@ -164,6 +164,17 @@ describe('empty solo group cleanup', () => {
     expect(loadEmptySoloGroups).toHaveBeenCalledWith('j');
   });
 
+  it('disables [삭제] while the group is being deleted', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
+    let resolve!: (v: boolean) => void;
+    (deleteFamilyIfEmpty as jest.Mock).mockReturnValue(new Promise<boolean>((r) => (resolve = r)));
+    await submit();
+    await fireEvent.press(await screen.findByRole('button', { name: '삭제' }));
+    expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled();
+    await act(async () => resolve(true));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+  });
+
   it('does not leave on [유지]', async () => {
     (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
     await submit();

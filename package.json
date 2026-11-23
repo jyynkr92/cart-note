@@ -67,7 +67,7 @@
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "expo customize tsconfig.json && tsc --noEmit",
-    "lint": "eslint . --max-warnings=24",
+    "lint": "eslint . --max-warnings=22",
     "build": "expo export --platform ios --platform android",
     "audit:prod": "npm audit --omit=dev --audit-level=high"
   },

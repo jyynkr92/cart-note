@@ -154,6 +154,7 @@ export default function Join() {
         confirmLabel="삭제"
         cancelLabel="유지"
         destructive
+        confirmDisabled={busy}
         onConfirm={() => void answer(true)}
         onCancel={() => void answer(false)}
       />
