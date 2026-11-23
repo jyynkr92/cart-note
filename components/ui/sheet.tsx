@@ -165,6 +165,7 @@ type ConfirmSheetProps = {
 
 /**
  * 확인/취소 시트. 확인은 onConfirm만 부르고, 닫는 것은 부모가 open=false로 한다.
+ * 부모는 onConfirm에서 반드시 open=false로 바꿔야 한다.
  * 취소 버튼·끌어 닫기·배경·뒤로가기는 onCancel이다. 확인한 뒤에 오는 닫기는 취소로 보지 않는다.
  */
 function ConfirmSheet({
@@ -203,7 +204,11 @@ function ConfirmSheet({
           }}>
           <Text>{confirmLabel}</Text>
         </Button>
-        <Button variant="outline" onPress={onCancel}>
+        <Button
+          variant="outline"
+          onPress={() => {
+            if (!confirmedRef.current) onCancel();
+          }}>
           <Text>{cancelLabel}</Text>
         </Button>
       </SheetFooter>

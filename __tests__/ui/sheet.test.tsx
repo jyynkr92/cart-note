@@ -229,6 +229,7 @@ describe('SheetInput', () => {
     const className: string = input.mock.lastCall?.[0].className ?? '';
     expect(className).toContain(inputClassName(false));
     expect(className).toContain('mt-2');
+    input.mockRestore();
   });
 
   it('shares Input classes, including disabled opacity and the native placeholder colour', () => {
@@ -275,6 +276,16 @@ describe('ConfirmSheet', () => {
     await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
     // 부모가 아직 닫지 않은 사이에 사용자가 끌어 닫는다.
     await dismissSheetByUser();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('cancel button does nothing after confirm', async () => {
+    const onConfirm = jest.fn();
+    const onCancel = jest.fn();
+    await render(renderConfirm(true, onConfirm, onCancel));
+    await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
+    await fireEvent.press(screen.getByRole('button', { name: '취소' }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onCancel).not.toHaveBeenCalled();
   });

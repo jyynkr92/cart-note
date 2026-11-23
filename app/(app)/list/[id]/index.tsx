@@ -3,20 +3,14 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, BackHandler, ScrollView, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  ConfirmSheet,
+  MenuSheet,
+  Sheet,
+  SheetFooter,
+  SheetHeader,
+  SheetInput,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useCurrentGroup } from '@/src/groups/use-groups';
@@ -223,43 +217,40 @@ export default function ListDetail() {
               {list.name}
             </Text>
           </View>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" accessibilityLabel="목록 메뉴">
+          <MenuSheet
+            trigger={(show) => (
+              <Button variant="ghost" size="icon" accessibilityLabel="목록 메뉴" onPress={show}>
                 <Text>⋯</Text>
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-48">
-              <DropdownMenuItem
-                disabled={done.length === 0}
-                onPress={() => clearDone.mutate({ listId })}>
-                <Text>완료 항목 지우기</Text>
-              </DropdownMenuItem>
-              <DropdownMenuItem
+            )}
+            items={[
+              {
+                label: '완료 항목 지우기',
+                disabled: done.length === 0,
+                onPress: () => clearDone.mutate({ listId }),
+              },
+              {
+                label: '목록 비우기',
                 // 항목을 불러오기 전에는 지울 대상(id)을 알 수 없다.
-                disabled={!items.data?.length}
-                onPress={() => setMode('clear')}>
-                <Text>목록 비우기</Text>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onPress={openRename}>
-                <Text>이름 변경</Text>
-              </DropdownMenuItem>
-              {list.kind === 'store' ? (
-                <DropdownMenuItem
-                  onPress={() =>
-                    router.push({ pathname: '/list/[id]/locations', params: { id: listId } })
-                  }>
-                  <Text>지점 관리</Text>
-                </DropdownMenuItem>
-              ) : null}
-              {list.kind !== 'inbox' ? (
-                <DropdownMenuItem onPress={() => setMode('delete')}>
-                  <Text>목록 삭제</Text>
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                disabled: !items.data?.length,
+                onPress: () => setMode('clear'),
+              },
+              'separator',
+              { label: '이름 변경', onPress: openRename },
+              ...(list.kind === 'store'
+                ? [
+                    {
+                      label: '지점 관리',
+                      onPress: () =>
+                        router.push({ pathname: '/list/[id]/locations', params: { id: listId } }),
+                    },
+                  ]
+                : []),
+              ...(list.kind !== 'inbox'
+                ? [{ label: '목록 삭제', onPress: () => setMode('delete') }]
+                : []),
+            ]}
+          />
         </View>
       )}
 
@@ -339,76 +330,53 @@ export default function ListDetail() {
         onSelect={confirmMove}
       />
 
-      <Dialog open={mode === 'deleteSelected'} onOpenChange={(o) => !o && setMode(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>항목 삭제</DialogTitle>
-            <DialogDescription>{`${selectedIds.length}개 항목을 삭제할까요?`}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onPress={() => setMode(null)}>
-              <Text>취소</Text>
-            </Button>
-            <Button variant="destructive" onPress={confirmDeleteSelected}>
-              <Text>삭제</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmSheet
+        open={mode === 'deleteSelected'}
+        title="항목 삭제"
+        description={`${selectedIds.length}개 항목을 삭제할까요?`}
+        confirmLabel="삭제"
+        destructive
+        onConfirm={confirmDeleteSelected}
+        onCancel={() => setMode(null)}
+      />
 
-      <Dialog open={mode === 'rename'} onOpenChange={(o) => !o && setMode(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>목록 이름 변경</DialogTitle>
-          </DialogHeader>
-          <Input
-            placeholder="목록 이름"
-            value={listName}
-            onChangeText={setListName}
-            maxLength={MAX_LENGTH.listName}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button onPress={saveRename} disabled={!renameTrimmed}>
-              <Text>저장</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Sheet open={mode === 'rename'} onOpenChange={(o) => !o && setMode(null)}>
+        <SheetHeader>
+          <SheetTitle>목록 이름 변경</SheetTitle>
+        </SheetHeader>
+        <SheetInput
+          placeholder="목록 이름"
+          value={listName}
+          onChangeText={setListName}
+          maxLength={MAX_LENGTH.listName}
+          autoFocus
+        />
+        <SheetFooter>
+          <Button onPress={saveRename} disabled={!renameTrimmed}>
+            <Text>저장</Text>
+          </Button>
+        </SheetFooter>
+      </Sheet>
 
-      <Dialog open={mode === 'clear'} onOpenChange={(o) => !o && setMode(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>목록 비우기</DialogTitle>
-            <DialogDescription>목록의 모든 항목을 삭제할까요?</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onPress={() => setMode(null)}>
-              <Text>취소</Text>
-            </Button>
-            <Button variant="destructive" onPress={confirmClear}>
-              <Text>비우기</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmSheet
+        open={mode === 'clear'}
+        title="목록 비우기"
+        description="목록의 모든 항목을 삭제할까요?"
+        confirmLabel="비우기"
+        destructive
+        onConfirm={confirmClear}
+        onCancel={() => setMode(null)}
+      />
 
-      <Dialog open={mode === 'delete'} onOpenChange={(o) => !o && setMode(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>목록 삭제</DialogTitle>
-            <DialogDescription>{`'${list.name}' 목록과 모든 항목이 삭제돼요.`}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onPress={() => setMode(null)}>
-              <Text>취소</Text>
-            </Button>
-            <Button variant="destructive" onPress={confirmDelete}>
-              <Text>삭제</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmSheet
+        open={mode === 'delete'}
+        title="목록 삭제"
+        description={`'${list.name}' 목록과 모든 항목이 삭제돼요.`}
+        confirmLabel="삭제"
+        destructive
+        onConfirm={confirmDelete}
+        onCancel={() => setMode(null)}
+      />
     </>
   );
 }
