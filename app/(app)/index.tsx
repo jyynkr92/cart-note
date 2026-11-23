@@ -4,15 +4,8 @@ import { Settings } from 'lucide-react-native';
 import { useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Sheet, SheetFooter, SheetHeader, SheetInput, SheetTitle } from '@/components/ui/sheet';
 import { Icon } from '@/components/ui/icon';
-import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { GroupSwitcher } from '@/src/groups/GroupSwitcher';
@@ -64,10 +57,7 @@ export default function Home() {
         <Button onPress={retry}>
           <Text>다시 시도</Text>
         </Button>
-        <Button
-          variant="ghost"
-          accessibilityLabel="설정"
-          onPress={() => router.push('/settings')}>
+        <Button variant="ghost" accessibilityLabel="설정" onPress={() => router.push('/settings')}>
           <Text>설정</Text>
         </Button>
       </View>
@@ -133,46 +123,44 @@ export default function Home() {
         </ScrollView>
       )}
 
-      <Dialog open={adding} onOpenChange={setAdding}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>목록 추가</DialogTitle>
-          </DialogHeader>
-          <Input
-            placeholder="목록 이름"
-            value={name}
-            onChangeText={setName}
-            maxLength={MAX_LENGTH.listName}
-            autoFocus
-          />
-          <View className="flex-row gap-2" accessibilityRole="radiogroup">
-            <Button
-              variant={kind === 'store' ? 'default' : 'outline'}
-              className="flex-1"
-              // Button이 role="button"을 넣으므로 role도 덮어써야 radio로 읽힌다.
-              role="radio"
-              accessibilityRole="radio"
-              accessibilityState={{ selected: kind === 'store' }}
-              onPress={() => setKind('store')}>
-              <Text>마트</Text>
-            </Button>
-            <Button
-              variant={kind === 'online' ? 'default' : 'outline'}
-              className="flex-1"
-              role="radio"
-              accessibilityRole="radio"
-              accessibilityState={{ selected: kind === 'online' }}
-              onPress={() => setKind('online')}>
-              <Text>사이트</Text>
-            </Button>
-          </View>
-          <DialogFooter>
-            <Button onPress={save} disabled={!trimmed}>
-              <Text>저장</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Sheet open={adding} onOpenChange={setAdding}>
+        <SheetHeader>
+          <SheetTitle>목록 추가</SheetTitle>
+        </SheetHeader>
+        <SheetInput
+          placeholder="목록 이름"
+          value={name}
+          onChangeText={setName}
+          maxLength={MAX_LENGTH.listName}
+          autoFocus
+        />
+        <View className="flex-row gap-2" accessibilityRole="radiogroup">
+          <Button
+            variant={kind === 'store' ? 'default' : 'outline'}
+            className="flex-1"
+            // Button이 role="button"을 넣으므로 role도 덮어써야 radio로 읽힌다.
+            role="radio"
+            accessibilityRole="radio"
+            accessibilityState={{ selected: kind === 'store' }}
+            onPress={() => setKind('store')}>
+            <Text>마트</Text>
+          </Button>
+          <Button
+            variant={kind === 'online' ? 'default' : 'outline'}
+            className="flex-1"
+            role="radio"
+            accessibilityRole="radio"
+            accessibilityState={{ selected: kind === 'online' }}
+            onPress={() => setKind('online')}>
+            <Text>사이트</Text>
+          </Button>
+        </View>
+        <SheetFooter>
+          <Button onPress={save} disabled={!trimmed}>
+            <Text>저장</Text>
+          </Button>
+        </SheetFooter>
+      </Sheet>
     </View>
   );
 }

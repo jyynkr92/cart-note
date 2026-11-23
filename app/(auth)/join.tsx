@@ -3,13 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { ConfirmSheet } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
@@ -152,21 +146,17 @@ export default function Join() {
       <Button variant="ghost" onPress={skip}>
         <Text>나중에 할게요</Text>
       </Button>
-      <Dialog open={cleanup.length > 0} onOpenChange={(open) => !open && void answer(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{`비어 있는 '${cleanup[0]?.name ?? ''}' 그룹을 삭제할까요?`}</DialogTitle>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onPress={() => void answer(false)}>
-              <Text>유지</Text>
-            </Button>
-            <Button variant="destructive" onPress={() => void answer(true)}>
-              <Text>삭제</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 그룹마다 새 시트로 띄운다. 확인한 시트가 다음 그룹 질문까지 이어지면 그 취소가 무시된다. */}
+      <ConfirmSheet
+        key={cleanup[0]?.id}
+        open={cleanup.length > 0}
+        title={`비어 있는 '${cleanup[0]?.name ?? ''}' 그룹을 삭제할까요?`}
+        confirmLabel="삭제"
+        cancelLabel="유지"
+        destructive
+        onConfirm={() => void answer(true)}
+        onCancel={() => void answer(false)}
+      />
     </View>
   );
 }

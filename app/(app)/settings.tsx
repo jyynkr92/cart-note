@@ -5,13 +5,13 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Share, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+  ConfirmSheet,
+  Sheet,
+  SheetFooter,
+  SheetHeader,
+  SheetInput,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { NearbyAlertToggle } from '@/src/geofence/NearbyAlertToggle';
@@ -128,9 +128,7 @@ export default function Settings() {
       if (!trimmed || !userId) return;
       await updateDisplayName(userId, trimmed);
       // 내 이름은 내가 속한 모든 그룹의 멤버 목록에 보인다.
-      await Promise.all(
-        families.map((f) => qc.invalidateQueries({ queryKey: qk.members(f.id) }))
-      );
+      await Promise.all(families.map((f) => qc.invalidateQueries({ queryKey: qk.members(f.id) })));
     }, '이름을 저장하지 못했어요');
 
   async function leave() {
@@ -276,76 +274,65 @@ export default function Settings() {
         </Button>
       </View>
 
-      <Dialog open={mode === 'regenerate'} onOpenChange={(o) => !o && setMode(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>초대 코드를 다시 만들까요?</DialogTitle>
-          </DialogHeader>
-          <Text>이전 코드는 더 이상 사용할 수 없어요.</Text>
-          <DialogFooter>
-            <Button variant="outline" onPress={() => setMode(null)}>
-              <Text>취소</Text>
-            </Button>
-            <Button onPress={() => void regenerate()} disabled={busy}>
-              <Text>재발급</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 확인하면 시트를 먼저 닫고 실행한다. 실패해도 확인한 채로 열려 있는 시트가 남지 않게 한다(실패는 토스트로 알린다). */}
+      <ConfirmSheet
+        open={mode === 'regenerate'}
+        title="초대 코드를 다시 만들까요?"
+        description="이전 코드는 더 이상 사용할 수 없어요."
+        confirmLabel="재발급"
+        confirmDisabled={busy}
+        onConfirm={() => {
+          setMode(null);
+          void regenerate();
+        }}
+        onCancel={() => setMode(null)}
+      />
 
-      <Dialog open={mode === 'leave'} onOpenChange={(o) => !o && setMode(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{`'${family.name}' 그룹에서 나갈까요?`}</DialogTitle>
-          </DialogHeader>
-          <Text>마지막 멤버가 나가면 그룹과 목록이 삭제돼요.</Text>
-          <DialogFooter>
-            <Button variant="outline" onPress={() => setMode(null)}>
-              <Text>취소</Text>
-            </Button>
-            <Button variant="destructive" onPress={() => void leave()} disabled={busy}>
-              <Text>나가기</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmSheet
+        open={mode === 'leave'}
+        title={`'${family.name}' 그룹에서 나갈까요?`}
+        description="마지막 멤버가 나가면 그룹과 목록이 삭제돼요."
+        confirmLabel="나가기"
+        destructive
+        confirmDisabled={busy}
+        onConfirm={() => {
+          setMode(null);
+          void leave();
+        }}
+        onCancel={() => setMode(null)}
+      />
 
-      <Dialog open={mode === 'name'} onOpenChange={(o) => !o && setMode(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>내 이름 변경</DialogTitle>
-          </DialogHeader>
-          <Input
-            placeholder="이름"
-            value={name}
-            onChangeText={setName}
-            maxLength={MAX_LENGTH.displayName}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button onPress={() => void saveName()} disabled={!trimmed || busy}>
-              <Text>저장</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Sheet open={mode === 'name'} onOpenChange={(o) => !o && setMode(null)}>
+        <SheetHeader>
+          <SheetTitle>내 이름 변경</SheetTitle>
+        </SheetHeader>
+        <SheetInput
+          placeholder="이름"
+          value={name}
+          onChangeText={setName}
+          maxLength={MAX_LENGTH.displayName}
+          autoFocus
+        />
+        <SheetFooter>
+          <Button onPress={() => void saveName()} disabled={!trimmed || busy}>
+            <Text>저장</Text>
+          </Button>
+        </SheetFooter>
+      </Sheet>
 
-      <Dialog open={mode === 'logout'} onOpenChange={(o) => !o && setMode(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>로그아웃할까요?</DialogTitle>
-          </DialogHeader>
-          <Text>동기화되지 않은 변경이 사라져요.</Text>
-          <DialogFooter>
-            <Button variant="outline" onPress={() => setMode(null)}>
-              <Text>취소</Text>
-            </Button>
-            <Button variant="destructive" onPress={() => void logout()} disabled={busy}>
-              <Text>로그아웃</Text>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmSheet
+        open={mode === 'logout'}
+        title="로그아웃할까요?"
+        description="동기화되지 않은 변경이 사라져요."
+        confirmLabel="로그아웃"
+        destructive
+        confirmDisabled={busy}
+        onConfirm={() => {
+          setMode(null);
+          void logout();
+        }}
+        onCancel={() => setMode(null)}
+      />
 
       {groupName.dialog}
     </ScrollView>

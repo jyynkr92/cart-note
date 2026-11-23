@@ -1,14 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type ReactElement } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { Sheet, SheetFooter, SheetHeader, SheetInput, SheetTitle } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 import { qk } from '@/src/lib/query-keys';
 import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
@@ -65,25 +58,23 @@ export function useGroupNameDialog(family: Family | null): {
   }
 
   const dialog = (
-    <Dialog open={mode !== null} onOpenChange={(o) => !o && setMode(null)}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{mode === 'rename' ? '그룹 이름 변경' : '새 그룹'}</DialogTitle>
-        </DialogHeader>
-        <Input
-          placeholder="그룹 이름"
-          value={name}
-          onChangeText={setName}
-          maxLength={MAX_LENGTH.groupName}
-          autoFocus
-        />
-        <DialogFooter>
-          <Button onPress={() => void save()} disabled={!trimmed || busy}>
-            <Text>저장</Text>
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <Sheet open={mode !== null} onOpenChange={(o) => !o && setMode(null)}>
+      <SheetHeader>
+        <SheetTitle>{mode === 'rename' ? '그룹 이름 변경' : '새 그룹'}</SheetTitle>
+      </SheetHeader>
+      <SheetInput
+        placeholder="그룹 이름"
+        value={name}
+        onChangeText={setName}
+        maxLength={MAX_LENGTH.groupName}
+        autoFocus
+      />
+      <SheetFooter>
+        <Button onPress={() => void save()} disabled={!trimmed || busy}>
+          <Text>저장</Text>
+        </Button>
+      </SheetFooter>
+    </Sheet>
   );
 
   return { open, dialog };

@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { PortalHost } from '@rn-primitives/portal';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Share } from 'react-native';
@@ -84,7 +83,6 @@ const renderSettings = () =>
   render(
     <QueryClientProvider client={client}>
       <Settings />
-      <PortalHost />
     </QueryClientProvider>
   );
 

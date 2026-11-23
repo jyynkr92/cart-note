@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PortalHost } from '@rn-primitives/portal';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import AppLayout from '@/app/(app)/_layout';
@@ -73,7 +72,6 @@ const renderWithClient = (ui: ReactElement) =>
   render(
     <QueryClientProvider client={client}>
       {ui}
-      <PortalHost />
     </QueryClientProvider>
   );
 
