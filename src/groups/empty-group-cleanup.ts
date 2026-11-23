@@ -6,14 +6,16 @@ export type GroupSummary = { id: string; name: string; isEmpty: boolean };
 export function findEmptySoloGroups(
   families: GroupSummary[],
   joinedId: string
-): Array<{ id: string; name: string }> {
-  return families.filter((f) => f.id !== joinedId && f.isEmpty).map(({ id, name }) => ({ id, name }));
+): { id: string; name: string }[] {
+  return families
+    .filter((f) => f.id !== joinedId && f.isEmpty)
+    .map(({ id, name }) => ({ id, name }));
 }
 
 /** 정리 후보를 서버에서 조회한다. 실패하면 프롬프트를 건너뛰도록 빈 배열을 돌려준다. */
 export async function loadEmptySoloGroups(
   joinedId: string
-): Promise<Array<{ id: string; name: string }>> {
+): Promise<{ id: string; name: string }[]> {
   try {
     const mine = (await fetchMyFamilies()).filter((f) => f.id !== joinedId);
     const summaries = await Promise.all(

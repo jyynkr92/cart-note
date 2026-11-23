@@ -43,7 +43,7 @@ export default function Join() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 참여 후 정리를 물어볼 빈 개인 그룹(하나씩 차례로 묻는다)
-  const [cleanup, setCleanup] = useState<Array<{ id: string; name: string }>>([]);
+  const [cleanup, setCleanup] = useState<{ id: string; name: string }[]>([]);
 
   // 딥링크로 저장된 대기 코드 미리 채우기
   useEffect(() => {

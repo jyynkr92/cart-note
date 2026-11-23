@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { QueryClientProvider, onlineManager } from '@tanstack/react-query';
+import { QueryClientProvider, onlineManager, dehydrate } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react-native';
 import { createElement, type ReactNode } from 'react';
 import * as itemApi from '@/src/items/item-api';
@@ -7,7 +7,6 @@ import type { Item } from '@/src/items/item-api';
 import { useDeleteItems } from '@/src/items/use-items';
 import { createQueryClient, persistOptions } from '@/src/lib/query-client';
 import { qk } from '@/src/lib/query-keys';
-import { dehydrate } from '@tanstack/react-query';
 import {
   closeSession,
   getReprobeAttemptForTests,
@@ -232,7 +231,9 @@ describe('backend unreachable while NetInfo says online (I-2)', () => {
     setNetworkOnline(true);
     session = true;
     installReachabilityProbe(async () => false);
-    api.deleteItems.mockRejectedValueOnce(new RetryableNetworkError(new TypeError('Network request failed')));
+    api.deleteItems.mockRejectedValueOnce(
+      new RetryableNetworkError(new TypeError('Network request failed'))
+    );
     await deleteA();
     await waitFor(() => expect(mutation().state.isPaused).toBe(true));
     expect(onlineManager.isOnline()).toBe(false);

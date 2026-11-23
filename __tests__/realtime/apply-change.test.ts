@@ -18,7 +18,6 @@ const item = (id: string, over: Partial<Item> = {}): Item => ({
   ...over,
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const change = (eventType: 'INSERT' | 'UPDATE' | 'DELETE', n: any, o: any = {}): any => ({
   eventType,
   new: n,
@@ -197,7 +196,11 @@ describe('list_locations while mutations are busy', () => {
 
   it('INSERT/UPDATE skip locations(list_id) and lists, but still invalidate allLocations', () => {
     busy();
-    applyChange(qc, 'list_locations', change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' }));
+    applyChange(
+      qc,
+      'list_locations',
+      change('INSERT', { id: 'x', list_id: 'l1', family_id: 'f1' })
+    );
     expect(keys()).toEqual([qk.allLocations()]);
   });
 

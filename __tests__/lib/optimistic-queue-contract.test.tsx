@@ -87,8 +87,12 @@ describe.each(ENTITIES)('optimistic entity %s', (entity) => {
     const incoming = { ...row, name: 'remote', updated_at: '2026-01-02T00:00:00.000Z' };
     for (const table of tables) {
       for (const eventType of ['INSERT', 'UPDATE', 'DELETE'] as const) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        applyChange(qc, table, { eventType, new: incoming, old: { id: row.id }, schema: 'public' } as any);
+        applyChange(qc, table, {
+          eventType,
+          new: incoming,
+          old: { id: row.id },
+          schema: 'public',
+        } as any);
       }
     }
     expect(qc.getQueryData([entity, 'scope'])).toEqual([row]);
@@ -97,7 +101,7 @@ describe.each(ENTITIES)('optimistic entity %s', (entity) => {
 
   it('is skipped by the SUBSCRIBED refetch while the queue is busy', async () => {
     let statusCb: (s: string) => void = () => {};
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const channel: any = {
       on: jest.fn(() => channel),
       subscribe: jest.fn((cb: (s: string) => void) => {

@@ -58,7 +58,7 @@ export function invalidateWhenIdle(qc: QueryClient) {
  * id/시각처럼 재실행에도 같아야 하는 값은 prepare에서 만들어 변수에 담는다(영속화됨).
  */
 export function withPrepare<I, V>(
-  m: UseMutationResult<void, Error, V, any>, // eslint-disable-line @typescript-eslint/no-explicit-any
+  m: UseMutationResult<void, Error, V, any>,
   prepare: (input: I) => V | null
 ) {
   return {

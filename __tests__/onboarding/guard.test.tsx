@@ -1,13 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
-import { act, render, screen, waitFor } from '@testing-library/react-native';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import { StrictMode, type ReactElement } from 'react';
 import AppLayout from '@/app/(app)/_layout';
 import { createFamily, fetchMyFamilies } from '@/src/groups/group-api';
 import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-invite';
 import { refreshSession, signOut } from '@/src/auth/auth-api';
 import { reconcileCacheOwner } from '@/src/auth/signed-out-state';
-import { fireEvent } from '@testing-library/react-native';
 import { hasProfile } from '@/src/onboarding/profile-api';
 import { isOnboarded, markOnboarded } from '@/src/onboarding/onboarded-flag';
 import { useFamilyRealtime } from '@/src/realtime/use-family-realtime';

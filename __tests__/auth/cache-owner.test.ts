@@ -1,11 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient } from '@tanstack/react-query';
-import { reconcileCacheOwner } from '@/src/auth/signed-out-state';
+import { reconcileCacheOwner, resetOwnerFallbackNoticeForTests } from '@/src/auth/signed-out-state';
 import { resetGeofencing } from '@/src/geofence/sync-geofences';
 import { clearCurrentGroup } from '@/src/groups/current-group-store';
 import { clearUserCache, syncCacheOwner } from '@/src/lib/query-client';
 import { toast } from '@/src/lib/toast';
-import { resetOwnerFallbackNoticeForTests } from '@/src/auth/signed-out-state';
 import { clearOnboarded } from '@/src/onboarding/onboarded-flag';
 import { isSessionOpen, openSession, resetSessionGateForTests } from '@/src/lib/session-gate';
 
@@ -70,7 +69,12 @@ describe('null session with a stored refresh token (B1)', () => {
   const storeSession = (over: Record<string, unknown> = {}) =>
     AsyncStorage.setItem(
       'test-auth',
-      JSON.stringify({ access_token: 'expired', refresh_token: 'r1', user: { id: '6f1c2a9e-1b2c-4d3e-8f40-0a1b2c3d4e5f' }, ...over })
+      JSON.stringify({
+        access_token: 'expired',
+        refresh_token: 'r1',
+        user: { id: '6f1c2a9e-1b2c-4d3e-8f40-0a1b2c3d4e5f' },
+        ...over,
+      })
     );
 
   it('keeps the cache, queue and device state and does not resume', async () => {

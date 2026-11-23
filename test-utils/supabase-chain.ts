@@ -4,9 +4,9 @@
  */
 export function chain(result: unknown): {
   builder: unknown;
-  calls: Array<[string, unknown[]]>;
+  calls: [string, unknown[]][];
 } {
-  const calls: Array<[string, unknown[]]> = [];
+  const calls: [string, unknown[]][] = [];
   const builder: unknown = new Proxy(
     {},
     {
