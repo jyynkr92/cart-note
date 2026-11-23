@@ -97,3 +97,15 @@ export function holdSheetDismissals(): () => Promise<void> {
     });
   };
 }
+
+/** 목의 모듈 상태(올라온 모달 목록, 미루기, 미뤄 둔 onDismiss)를 비운다. */
+export function resetBottomSheetMock(): void {
+  presented.length = 0;
+  holding = false;
+  held.length = 0;
+}
+
+// jest.setup.ts의 afterEach가 이 목을 불러온 테스트 파일에서만 부를 수 있게 등록한다
+// (거기서 모듈을 직접 require하면 이 목을 안 쓰는 테스트에서도 testing-library를 테스트 도중에 불러온다).
+(globalThis as { __resetBottomSheetMock?: () => void }).__resetBottomSheetMock =
+  resetBottomSheetMock;

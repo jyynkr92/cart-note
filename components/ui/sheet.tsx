@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { inputClassName } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { THEME } from '@/lib/theme';
@@ -11,7 +12,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import { cssInterop, useColorScheme } from 'nativewind';
 import * as React from 'react';
-import { BackHandler, View, type TextInput } from 'react-native';
+import { BackHandler, Pressable, View, type TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // BottomSheetTextInput은 nativewind가 모르는 컴포넌트라 TextInput과 같은 방식으로 className을 style로 바꾼다.
@@ -89,7 +90,8 @@ function Sheet({ open, onOpenChange, children, onClosed }: SheetProps) {
       ref.current?.present();
     } else {
       setShown(false);
-      if (!byCode) onOpenChange(false);
+      // 부모가 그 사이 open=false로 바꿨다면 이미 닫힌 것으로 알고 있으니 다시 알리지 않는다.
+      if (!byCode && openRef.current) onOpenChange(false);
     }
     onClosed?.();
   };
@@ -149,4 +151,157 @@ function SheetInput({ className, ref, ...props }: React.ComponentProps<typeof Te
   );
 }
 
-export { Sheet, SheetDescription, SheetFooter, SheetHeader, SheetInput, SheetTitle };
+type ConfirmSheetProps = {
+  open: boolean;
+  title: string;
+  description?: React.ReactNode;
+  confirmLabel: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  confirmDisabled?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+};
+
+/**
+ * 확인/취소 시트. 확인은 onConfirm만 부르고, 닫는 것은 부모가 open=false로 한다.
+ * 취소 버튼·끌어 닫기·배경·뒤로가기는 onCancel이다. 확인한 뒤에 오는 닫기는 취소로 보지 않는다.
+ */
+function ConfirmSheet({
+  open,
+  title,
+  description,
+  confirmLabel,
+  cancelLabel = '취소',
+  destructive,
+  confirmDisabled,
+  onConfirm,
+  onCancel,
+}: ConfirmSheetProps) {
+  const confirmedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (open) confirmedRef.current = false;
+  }, [open]);
+
+  const onOpenChange = (next: boolean) => {
+    if (!next && !confirmedRef.current) onCancel();
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetHeader>
+        <SheetTitle>{title}</SheetTitle>
+        {description ? <SheetDescription>{description}</SheetDescription> : null}
+      </SheetHeader>
+      <SheetFooter>
+        <Button
+          variant={destructive ? 'destructive' : 'default'}
+          disabled={confirmDisabled}
+          onPress={() => {
+            confirmedRef.current = true;
+            onConfirm();
+          }}>
+          <Text>{confirmLabel}</Text>
+        </Button>
+        <Button variant="outline" onPress={onCancel}>
+          <Text>{cancelLabel}</Text>
+        </Button>
+      </SheetFooter>
+    </Sheet>
+  );
+}
+
+type MenuSheetItem =
+  | {
+      label: string;
+      onPress: () => void;
+      disabled?: boolean;
+      destructive?: boolean;
+      selected?: boolean;
+    }
+  | 'separator';
+
+type MenuSheetProps = {
+  trigger: (open: () => void) => React.ReactNode;
+  items: MenuSheetItem[];
+  title?: string;
+};
+
+/**
+ * 트리거로 여는 메뉴 시트. 항목을 누르면 메뉴를 닫고, 그 항목의 onPress는 닫는 애니메이션이 끝난 뒤에 부른다
+ * (항목이 다른 시트를 열어도 두 시트가 동시에 움직이지 않게). 맨 아래 취소 행은 닫기만 한다.
+ */
+function MenuSheet({ trigger, items, title }: MenuSheetProps) {
+  const [open, setOpen] = React.useState(false);
+  // 닫힌 뒤 부를 항목. 닫히기 전에 여러 번 눌리면 마지막 것만 한 번 부른다.
+  const pendingRef = React.useRef<(() => void) | null>(null);
+  const show = React.useCallback(() => setOpen(true), []);
+
+  const onClosed = () => {
+    const run = pendingRef.current;
+    pendingRef.current = null;
+    run?.();
+  };
+
+  return (
+    <>
+      {trigger(show)}
+      <Sheet open={open} onOpenChange={setOpen} onClosed={onClosed}>
+        {title ? (
+          <SheetHeader>
+            <SheetTitle>{title}</SheetTitle>
+          </SheetHeader>
+        ) : null}
+        <View className="-mx-2">
+          {items.map((item, i) =>
+            item === 'separator' ? (
+              <View key={`separator-${i}`} className="mx-2 my-1 h-px bg-border" />
+            ) : (
+              <Pressable
+                key={`${item.label}-${i}`}
+                accessibilityRole="menuitem"
+                accessibilityState={{ disabled: !!item.disabled, selected: !!item.selected }}
+                disabled={item.disabled}
+                onPress={() => {
+                  pendingRef.current = item.onPress;
+                  setOpen(false);
+                }}
+                className={cn(
+                  'h-12 flex-row items-center rounded-md px-2 active:bg-accent',
+                  item.disabled && 'opacity-50'
+                )}>
+                <Text
+                  className={cn(
+                    item.selected && 'font-semibold',
+                    item.destructive && 'text-destructive'
+                  )}>
+                  {item.label}
+                </Text>
+              </Pressable>
+            )
+          )}
+        </View>
+        <Button
+          variant="outline"
+          onPress={() => {
+            pendingRef.current = null;
+            setOpen(false);
+          }}>
+          <Text>취소</Text>
+        </Button>
+      </Sheet>
+    </>
+  );
+}
+
+export {
+  ConfirmSheet,
+  MenuSheet,
+  Sheet,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetInput,
+  SheetTitle,
+};
+export type { MenuSheetItem };

@@ -46,6 +46,11 @@ jest.mock(
 // bottom sheet는 reanimated/gesture-handler 위에서 돈다. Jest에서는 present/dismiss를 동기로 처리하는 목으로 대체한다
 // (목과 사용자 닫기 helper는 test-utils/bottom-sheet.tsx).
 jest.mock('@gorhom/bottom-sheet', () => jest.requireActual('@/test-utils/bottom-sheet'));
+// 한 테스트에서 남긴 미루기(holdSheetDismissals)나 열린 모달 목록이 다음 테스트로 새지 않게 한다.
+// 목 모듈이 불러와졌을 때만 등록돼 있다(test-utils/bottom-sheet.tsx).
+afterEach(() => {
+  (globalThis as { __resetBottomSheetMock?: () => void }).__resetBottomSheetMock?.();
+});
 
 // 드롭다운은 트리거를 measure한 뒤에야 내용을 그린다. Jest의 View는 measure가 no-op이라 값을 채워 준다.
 let originalMeasure: unknown;
