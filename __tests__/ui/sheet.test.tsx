@@ -40,6 +40,22 @@ afterEach(() => {
 });
 
 describe('Sheet', () => {
+  it('an open sheet that unmounts calls neither onOpenChange nor onClosed', async () => {
+    const onOpenChange = jest.fn();
+    const onClosed = jest.fn();
+    const { unmount } = await render(
+      <Sheet open onOpenChange={onOpenChange} onClosed={onClosed}>
+        <Text>내용</Text>
+      </Sheet>
+    );
+    await unmount();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(onClosed).not.toHaveBeenCalled();
+  });
+
   it('renders children only while open', async () => {
     const { rerender } = await render(
       <Sheet open={false} onOpenChange={jest.fn()}>

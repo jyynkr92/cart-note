@@ -52,6 +52,14 @@ function Sheet({ open, onOpenChange, children, onClosed }: SheetProps) {
   const presentedRef = React.useRef(false);
   // open=false로 코드가 dismiss()를 불렀고 그 onDismiss가 아직 안 왔는지. 이 표시가 없는 onDismiss만 사용자 닫기다.
   const closingByCodeRef = React.useRef(false);
+  // 언마운트된 뒤 늦게 오는 onDismiss(라이브러리는 올라온 모달이 언마운트되면 닫고 onDismiss를 부른다)는 아무것도 부르지 않는다.
+  const mountedRef = React.useRef(true);
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const [shown, setShown] = React.useState(open);
   if (open && !shown) setShown(true);
   const { bottom } = useSafeAreaInsets();
@@ -81,6 +89,7 @@ function Sheet({ open, onOpenChange, children, onClosed }: SheetProps) {
   }, [open, onOpenChange]);
 
   const onDismiss = () => {
+    if (!mountedRef.current) return;
     presentedRef.current = false;
     const byCode = closingByCodeRef.current;
     closingByCodeRef.current = false;

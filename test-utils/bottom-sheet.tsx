@@ -61,7 +61,19 @@ export const BottomSheetModal = React.forwardRef<unknown, ModalProps>(
         collapse: noop,
       };
     }, []);
-    React.useEffect(() => () => removeEntry(entry.current), []);
+    // 라이브러리처럼, 올라와 있던 모달이 언마운트되면 닫고(닫는 애니메이션 뒤) 마지막 onDismiss를 부른다.
+    React.useEffect(
+      () => () => {
+        const current = entry.current;
+        removeEntry(current);
+        if (!current) return;
+        entry.current = null;
+        const deliver = () => onDismissRef.current?.();
+        if (holding) held.push(deliver);
+        else queueMicrotask(deliver);
+      },
+      []
+    );
     return visible ? <>{props.children}</> : null;
   }
 );
