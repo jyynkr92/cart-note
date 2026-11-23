@@ -5,7 +5,16 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*', '.expo/*', 'coverage/*', 'supabase/functions/**'],
+    // Edge Function 진입점(index.ts)은 Deno 전용이라 tsconfig와 같이 뺀다. handler.ts는 린트·타입 검사·테스트 대상이다.
+    ignores: [
+      'dist/*',
+      '.expo/*',
+      'coverage/*',
+      'ios/*',
+      'android/*',
+      '.superpowers/*',
+      'supabase/functions/**/index.ts',
+    ],
   },
   {
     files: ['**/*.ts', '**/*.tsx'],

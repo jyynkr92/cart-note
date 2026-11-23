@@ -1,8 +1,4 @@
-// TanStack Query의 gc/재시도 타이머(최대 7일)가 Jest 프로세스 종료를 막지 않도록 unref한다.
 import { timeoutManager } from '@tanstack/react-query';
-
-// 세션 게이트는 기본이 "세션 없음"(fail closed)이다. 테스트에서는 테스트 사용자로 게이트를 열고, 세션 확인은
-// 게이트를 연 사용자를 돌려준다(세션 게이트 동작은 __tests__/lib/session-gate.test.ts가 직접 설치해 검증한다).
 import { getVerifiedUserId, installSessionCheck, openSession } from '@/src/lib/session-gate';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -11,6 +7,8 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 
 // expo-crypto는 네이티브 모듈이라 Jest에서는 Node의 crypto로 대체한다.
 jest.mock('expo-crypto', () => ({ randomUUID: () => require('crypto').randomUUID() }));
+
+// TanStack Query의 gc/재시도 타이머(최대 7일)가 Jest 프로세스 종료를 막지 않도록 unref한다.
 const unref = <T>(t: T): T => {
   (t as { unref?: () => void }).unref?.();
   return t;
@@ -87,5 +85,8 @@ jest.mock('expo-notifications', () => ({
   getLastNotificationResponseAsync: jest.fn().mockResolvedValue(null),
   clearLastNotificationResponse: jest.fn(),
 }));
+
+// 세션 게이트는 기본이 "세션 없음"(fail closed)이다. 테스트에서는 테스트 사용자로 게이트를 열고, 세션 확인은
+// 게이트를 연 사용자를 돌려준다(세션 게이트 동작은 __tests__/lib/session-gate.test.ts가 직접 설치해 검증한다).
 openSession('jest-user');
 installSessionCheck(async () => getVerifiedUserId());
