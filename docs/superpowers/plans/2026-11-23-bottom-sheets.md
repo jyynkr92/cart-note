@@ -38,7 +38,7 @@
 - Modify: `package.json`, `package-lock.json` (설치)
 - Modify: `app/_layout.tsx` — `GestureHandlerRootView` 안에 `BottomSheetModalProvider`
 - Modify: `jest.setup.ts` — `@gorhom/bottom-sheet` 전역 목
-- Modify: `components/ui/input.tsx` — 클래스 문자열을 `inputClassName` 상수로 export
+- Modify: `components/ui/input.tsx` — 공통 클래스를 `inputClassName(editable?)` 함수로 export
 - Create: `components/ui/sheet.tsx`
 - Test: `__tests__/ui/sheet.test.tsx`
 
@@ -47,7 +47,7 @@
   - `Sheet(props: { open: boolean; onOpenChange: (open: boolean) => void; children: React.ReactNode; onClosed?: () => void }): JSX.Element` — `onClosed`는 닫는 애니메이션이 끝난 뒤(`onDismiss`) 매번 불린다(사용자·코드 닫기 모두). Task 2가 쓴다.
   - `SheetHeader`, `SheetTitle`, `SheetDescription`, `SheetFooter`: `({ className?, children }) => JSX.Element`. `SheetTitle`은 `accessibilityRole="header"`. `SheetFooter`는 버튼을 세로로 전체 폭으로 쌓는다.
   - `SheetInput`: `React.ComponentProps<typeof TextInput>` 그대로 받는 `BottomSheetTextInput` 래퍼, 클래스는 `inputClassName` + `className`.
-- Produces (`components/ui/input.tsx`): `export const inputClassName: string`.
+- Produces (`components/ui/input.tsx`): `export function inputClassName(editable?: boolean): string` (Input과 SheetInput이 같이 씀).
 
 - [ ] **Step 1: 설치와 목**
 
