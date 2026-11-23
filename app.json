@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Cart Note",
+    "slug": "cart-note",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "cartnote",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/images/icon.png",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#208AEF",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "등록한 마트 근처에 가면 살 것을 알려 드리기 위해 앱을 사용하지 않을 때도 위치를 확인해요.",
+          "locationAlwaysPermission": "등록한 마트 근처에 가면 살 것을 알려 드리기 위해 앱을 사용하지 않을 때도 위치를 확인해요.",
+          "locationWhenInUsePermission": "가까운 마트를 먼저 알림 대상으로 고르기 위해 현재 위치를 확인해요.",
+          "locationFullAccuracyPermission": "가까운 마트를 정확히 고르기 위해 정확한 위치를 확인해요.",
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
