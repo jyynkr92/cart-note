@@ -5,6 +5,7 @@ import { useIsRestoring } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useEffect } from 'react';
 import { ThemeProvider } from 'expo-router/react-navigation';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { PortalHost } from '@rn-primitives/portal';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -74,17 +75,19 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-        <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-          <AuthProvider>
-            <CacheOwnerGuard />
-            <RootNavigator />
-          </AuthProvider>
-        </PersistQueryClientProvider>
-        <PortalHost />
-        <ToastHost />
-      </ThemeProvider>
+      <BottomSheetModalProvider>
+        <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+            <AuthProvider>
+              <CacheOwnerGuard />
+              <RootNavigator />
+            </AuthProvider>
+          </PersistQueryClientProvider>
+          <PortalHost />
+          <ToastHost />
+        </ThemeProvider>
+      </BottomSheetModalProvider>
     </GestureHandlerRootView>
   );
 }

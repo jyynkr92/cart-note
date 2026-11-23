@@ -1,11 +1,15 @@
 import { cn } from '@/lib/utils';
 import { Platform, TextInput } from 'react-native';
 
+/** 입력 칸의 기본 클래스. 시트 안의 입력 칸(SheetInput)도 같이 쓴다. */
+const inputClassName =
+  'dark:bg-input/30 border-input bg-background text-foreground flex h-10 w-full min-w-0 flex-row items-center rounded-md border px-3 py-1 text-base leading-5 shadow-sm shadow-black/5 sm:h-9';
+
 function Input({ className, ...props }: React.ComponentProps<typeof TextInput> & React.RefAttributes<TextInput>) {
   return (
     <TextInput
       className={cn(
-        'dark:bg-input/30 border-input bg-background text-foreground flex h-10 w-full min-w-0 flex-row items-center rounded-md border px-3 py-1 text-base leading-5 shadow-sm shadow-black/5 sm:h-9',
+        inputClassName,
         props.editable === false &&
         cn(
           'opacity-50',
@@ -26,4 +30,4 @@ function Input({ className, ...props }: React.ComponentProps<typeof TextInput> &
   );
 }
 
-export { Input };
+export { Input, inputClassName };

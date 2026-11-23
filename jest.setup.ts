@@ -43,6 +43,10 @@ jest.mock(
   () => require('react-native-safe-area-context/jest/mock').default
 );
 
+// bottom sheet는 reanimated/gesture-handler 위에서 돈다. Jest에서는 present/dismiss를 동기로 처리하는 목으로 대체한다
+// (목과 사용자 닫기 helper는 test-utils/bottom-sheet.tsx).
+jest.mock('@gorhom/bottom-sheet', () => jest.requireActual('@/test-utils/bottom-sheet'));
+
 // 드롭다운은 트리거를 measure한 뒤에야 내용을 그린다. Jest의 View는 measure가 no-op이라 값을 채워 준다.
 let originalMeasure: unknown;
 beforeAll(() => {
