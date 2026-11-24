@@ -544,7 +544,11 @@ describe('MenuSheet', () => {
     // 메뉴가 다시 올라왔고, 앞서 누른 항목은 취소됐다(메뉴와 그 항목이 연 시트가 겹치지 않게).
     expect(rename).not.toHaveBeenCalled();
     expect(screen.getByRole('menuitem', { name: '이름 바꾸기' })).toBeTruthy();
-    // 다시 열린 메뉴에서 고르면 한 번 부른다.
+    // 다시 열린 메뉴를 끌어 닫아도 앞서 누른 항목은 부르지 않는다.
+    await dismissSheetByUser();
+    expect(rename).not.toHaveBeenCalled();
+    // 다시 열어 고르면 한 번 부른다.
+    await openMenu();
     await fireEvent.press(screen.getByRole('menuitem', { name: '이름 바꾸기' }));
     expect(rename).toHaveBeenCalledTimes(1);
   });

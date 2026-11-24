@@ -287,11 +287,11 @@ function MenuSheet({ trigger, items }: MenuSheetProps) {
   const [open, setOpen] = React.useState(false);
   // 닫힌 뒤 부를 항목. 닫히기 전에 여러 번 눌리면 마지막 것만 한 번 부른다.
   const pendingRef = React.useRef<(() => void) | null>(null);
-  const show = React.useCallback(() => {
+  const show = React.useCallback(() => setOpen(true), []);
+  React.useEffect(() => {
     // 닫히는 도중에 다시 열면 그 항목은 부르지 않는다(다시 올라온 메뉴 위에 항목의 시트가 겹치지 않게).
-    pendingRef.current = null;
-    setOpen(true);
-  }, []);
+    if (open) pendingRef.current = null;
+  }, [open]);
 
   const onClosed = () => {
     const run = pendingRef.current;
