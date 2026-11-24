@@ -1,4 +1,4 @@
-import type * as React from 'react';
+import * as React from 'react';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 import { BackHandler, Pressable, Text, View } from 'react-native';
 import { inputClassName } from '@/components/ui/input';
@@ -364,6 +364,73 @@ describe('SheetInput', () => {
     expect(className).toContain(inputClassName(false));
     expect(className).toContain('mt-2');
     input.mockRestore();
+  });
+
+  /** 라이브러리 입력 칸을 실제 TextInput으로 그리되, 받은 props와 마운트 횟수를 기록하는 목으로 바꾼다. */
+  function spyOnSheetTextInput() {
+    const mod = jest.requireMock<typeof BottomSheetMock>('@gorhom/bottom-sheet');
+    const RealTextInput = mod.BottomSheetTextInput;
+    const mounts = { count: 0 };
+    const spy = jest
+      .spyOn(mod, 'BottomSheetTextInput')
+      .mockImplementation(function Recorder(props: React.ComponentProps<typeof RealTextInput>) {
+        React.useEffect(() => {
+          mounts.count += 1;
+        }, []);
+        return <RealTextInput {...props} />;
+      });
+    return { spy, mounts };
+  }
+
+  function ControlledSheetInput({ initial, onChange }: { initial: string; onChange?: jest.Mock }) {
+    const [value, setValue] = React.useState(initial);
+    return (
+      <Sheet open onOpenChange={jest.fn()}>
+        <SheetInput
+          placeholder="목록 이름"
+          value={value}
+          onChangeText={(text) => {
+            onChange?.(text);
+            setValue(text);
+          }}
+        />
+        <Pressable accessibilityRole="button" onPress={() => setValue('')}>
+          <Text>비우기</Text>
+        </Pressable>
+      </Sheet>
+    );
+  }
+
+  it('never passes value to the native input, only defaultValue (iOS Hangul IME breaks otherwise)', async () => {
+    const { spy } = spyOnSheetTextInput();
+    await render(<ControlledSheetInput initial="우유" />);
+    const props = spy.mock.lastCall?.[0];
+    expect(props).not.toHaveProperty('value');
+    expect(props?.defaultValue).toBe('우유');
+  });
+
+  it('typing forwards onChangeText without remounting the native input', async () => {
+    const { mounts } = spyOnSheetTextInput();
+    const onChange = jest.fn();
+    await render(<ControlledSheetInput initial="" onChange={onChange} />);
+    expect(mounts.count).toBe(1);
+    const before = screen.getByPlaceholderText('목록 이름');
+    await fireEvent.changeText(before, '하');
+    await fireEvent.changeText(screen.getByPlaceholderText('목록 이름'), '하이');
+    expect(onChange.mock.calls).toEqual([['하'], ['하이']]);
+    expect(mounts.count).toBe(1);
+    expect(screen.getByPlaceholderText('목록 이름')).toBe(before);
+  });
+
+  it('an outside value change remounts the native input with the new defaultValue', async () => {
+    const { spy, mounts } = spyOnSheetTextInput();
+    await render(<ControlledSheetInput initial="" />);
+    await fireEvent.changeText(screen.getByPlaceholderText('목록 이름'), '두부');
+    expect(mounts.count).toBe(1);
+    await fireEvent.press(screen.getByRole('button', { name: '비우기' }));
+    expect(mounts.count).toBe(2);
+    expect(spy.mock.lastCall?.[0].defaultValue).toBe('');
+    expect(spy.mock.lastCall?.[0]).not.toHaveProperty('value');
   });
 
   it('shares Input classes, including disabled opacity and the native placeholder colour', () => {

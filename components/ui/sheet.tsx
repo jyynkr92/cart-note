@@ -194,14 +194,50 @@ function SheetFooter({ className, children }: SheetPartProps) {
   return <View className={cn('w-full flex-col gap-2', className)}>{children}</View>;
 }
 
-/** 시트 안의 입력 칸. BottomSheetTextInput이어야 키보드를 따라 시트가 올라간다. */
-function SheetInput({ className, ref, ...props }: React.ComponentProps<typeof TextInput>) {
+/**
+ * 시트 안의 입력 칸. BottomSheetTextInput이어야 키보드를 따라 시트가 올라간다.
+ *
+ * 네이티브 입력 칸은 일부러 비제어(defaultValue)로 둔다. iOS에서 BottomSheetModal 포털로 그린
+ * TextInput에 value를 내려 주면 글자를 칠 때마다 네이티브 텍스트를 다시 넣으면서 IME가 조합 중인
+ * 글자를 확정해 버려, 한글이 "ㅎㅏㅇㅣ"처럼 풀리고 추천 단어도 안 뜬다(SheetInput 자체 상태로 옮겨도 같다).
+ * 그래서 value를 제어 입력으로 되돌리지 말 것. 호출부는 그대로 value/onChangeText를 넘기고, 여기서는
+ * 직접 친 글자와 다른 value가 바깥에서 들어올 때만 key를 바꿔 새 defaultValue로 다시 마운트한다.
+ */
+function SheetInput({
+  className,
+  ref,
+  value,
+  defaultValue,
+  onChangeText,
+  ...props
+}: React.ComponentProps<typeof TextInput>) {
+  // typed: 네이티브 칸이 지금 들고 있다고 아는 글자(마운트 값 또는 마지막 onChangeText).
+  const [native, setNative] = React.useState(() => {
+    const text = value ?? defaultValue;
+    return { key: 0, initial: text, typed: text };
+  });
+  if (value !== undefined && value !== native.typed) {
+    // 바깥에서 바뀐 값(초기화·정리 등)은 다시 마운트해서 반영한다. 렌더 중 상태 갱신은 이 컴포넌트 것만 바꾼다.
+    setNative({ key: native.key + 1, initial: value, typed: value });
+  }
+
+  const handleChangeText = React.useCallback(
+    (text: string) => {
+      setNative((prev) => (prev.typed === text ? prev : { ...prev, typed: text }));
+      onChangeText?.(text);
+    },
+    [onChangeText]
+  );
+
   return (
     <BottomSheetTextInput
+      key={native.key}
       // 라이브러리의 ref 타입은 TextInput | undefined라서 RN TextInput ref와 맞춰 준다.
       ref={ref as React.Ref<TextInput | undefined>}
       className={cn(inputClassName(props.editable), className)}
       {...props}
+      defaultValue={native.initial}
+      onChangeText={handleChangeText}
     />
   );
 }
