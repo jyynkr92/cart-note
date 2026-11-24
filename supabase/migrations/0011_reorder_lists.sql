@@ -11,7 +11,7 @@ begin
   end if;
 
   -- 동시 재정렬이 섞이지 않도록 이 그룹의 목록 행을 잠근다.
-  perform 1 from public.lists where family_id = p_family_id for update;
+  perform 1 from public.lists where family_id = p_family_id order by id for update;
 
   with given as (
     -- 그룹에 있는 inbox가 아닌 목록만, 첫 등장 위치 기준(중복 id는 한 번만).

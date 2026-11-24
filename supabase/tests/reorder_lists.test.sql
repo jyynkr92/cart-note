@@ -1,7 +1,7 @@
 -- 0011: reorder_lists — 목록 순서를 한 번에 저장한다(inbox 제외, 빠진 목록은 뒤에 붙임).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(17);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'a@test.dev'),
@@ -52,6 +52,33 @@ select is(
   (select array_agg(id order by sort_order) from lists where family_id = current_setting('t.fam')::uuid and kind <> 'inbox'),
   array['00000000-0000-0000-0000-0000000000c4','00000000-0000-0000-0000-0000000000c3','00000000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-0000000000c2']::uuid[],
   'omitted lists keep prior relative order behind the given ones');
+
+-- 중복 id: 첫 위치만 반영하고 오류 없이 지나간다.
+select lives_ok(
+  $$select reorder_lists(current_setting('t.fam')::uuid, array[
+      '00000000-0000-0000-0000-0000000000c2'::uuid,
+      '00000000-0000-0000-0000-0000000000c1'::uuid,
+      '00000000-0000-0000-0000-0000000000c2'::uuid])$$,
+  'duplicate ids do not raise');
+select is(
+  (select array_agg(id order by sort_order) from lists where family_id = current_setting('t.fam')::uuid and kind <> 'inbox'),
+  array['00000000-0000-0000-0000-0000000000c2','00000000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-0000000000c4','00000000-0000-0000-0000-0000000000c3']::uuid[],
+  'duplicate id: first position wins, rest keep prior order');
+
+-- null p_ids: 오류 없이 기존 상대 순서를 유지하며 1..n으로 다시 매긴다.
+select lives_ok(
+  $$select reorder_lists(current_setting('t.fam')::uuid, null)$$,
+  'null p_ids does not raise');
+select is(
+  (select array_agg(id::text || ':' || sort_order::text order by sort_order) from lists where family_id = current_setting('t.fam')::uuid and kind <> 'inbox'),
+  array['00000000-0000-0000-0000-0000000000c2:1','00000000-0000-0000-0000-0000000000c1:2','00000000-0000-0000-0000-0000000000c4:3','00000000-0000-0000-0000-0000000000c3:4'],
+  'null p_ids: relative order kept, numbered 1..n');
+
+-- 로그인 정보(sub)가 없으면 예외.
+set local request.jwt.claims = '{"role":"authenticated"}';
+select throws_ok(
+  $$select reorder_lists(current_setting('t.fam')::uuid, array[]::uuid[])$$,
+  'P0001', 'not authenticated', 'requires auth');
 
 -- 멤버가 아니면 예외.
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
