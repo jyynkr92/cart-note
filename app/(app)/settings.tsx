@@ -2,7 +2,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, Share, View } from 'react-native';
+import { ActivityIndicator, Keyboard, ScrollView, Share, View } from 'react-native';
 import { Button } from '@/components/ui/button';
 import {
   ConfirmSheet,
@@ -111,6 +111,8 @@ export default function Settings() {
       await fn();
       setMode(null);
     } catch {
+      // 시트는 열린 채로 남는다. 입력 칸의 키보드가 화면 아래 토스트를 가리지 않게 먼저 내린다.
+      Keyboard.dismiss();
       toast.error(failure);
     } finally {
       unlock();

@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type ReactElement } from 'react';
+import { Keyboard } from 'react-native';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -59,6 +60,8 @@ export function useGroupNameSheet(family: Family | null): {
       }
       setMode(null);
     } catch {
+      // 시트는 열린 채로 남는다. 입력 칸의 키보드가 화면 아래 토스트를 가리지 않게 먼저 내린다.
+      Keyboard.dismiss();
       toast.error(mode === 'rename' ? '이름을 바꾸지 못했어요' : '그룹을 만들지 못했어요');
     } finally {
       inFlight.current = false;

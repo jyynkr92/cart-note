@@ -2,13 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Share } from 'react-native';
+import { Keyboard, Share } from 'react-native';
 import Settings from '@/app/(app)/settings';
 import { signOut } from '@/src/auth/auth-api';
-import {
-  CURRENT_GROUP_KEY,
-  resetCurrentGroupStore,
-} from '@/src/groups/current-group-store';
+import { CURRENT_GROUP_KEY, resetCurrentGroupStore } from '@/src/groups/current-group-store';
 import {
   createFamily,
   fetchFamilyMembers,
@@ -64,7 +61,7 @@ const fam = (
   name: string,
   created_at: string,
   invite_code = '01234567',
-  invite_code_expires_at = FUTURE,
+  invite_code_expires_at = FUTURE
 ): Family => ({
   id,
   name,
@@ -162,7 +159,9 @@ it('regenerates only once on a double tap', async () => {
 });
 
 it('shares a message with the code and the deep link', async () => {
-  const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction', activityType: undefined });
+  const share = jest
+    .spyOn(Share, 'share')
+    .mockResolvedValue({ action: 'sharedAction', activityType: undefined });
   await ready();
   await fireEvent.press(screen.getByText('가족 초대하기'));
   const { message } = share.mock.calls[0][0] as { message: string };
@@ -336,8 +335,29 @@ describe('changing my name', () => {
     await waitFor(() => expect(updateDisplayName).toHaveBeenCalledWith('u1', '정이'));
     await waitFor(() => {
       const keys = spy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] }).queryKey);
-      expect(keys).toEqual(expect.arrayContaining([['members', 'g1'], ['members', 'g2']]));
+      expect(keys).toEqual(
+        expect.arrayContaining([
+          ['members', 'g1'],
+          ['members', 'g2'],
+        ])
+      );
     });
+  });
+
+  it('a failed save hides the keyboard before the error toast and keeps the sheet open', async () => {
+    // 토스트는 화면 아래에 떠서, 입력 칸이 열린 채면 iOS 키보드에 가린다.
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    (updateDisplayName as jest.Mock).mockRejectedValueOnce(new Error('network'));
+    const input = await open();
+    await fireEvent.changeText(input, '정이');
+    await fireEvent.press(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('이름을 저장하지 못했어요'));
+    expect(dismiss).toHaveBeenCalled();
+    expect(dismiss.mock.invocationCallOrder[0]).toBeLessThan(
+      (toast.error as jest.Mock).mock.invocationCallOrder[0]
+    );
+    expect(screen.getByDisplayValue('정이')).toBeTruthy();
+    dismiss.mockRestore();
   });
 });
 
