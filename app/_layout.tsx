@@ -74,18 +74,20 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <BottomSheetModalProvider>
-        <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-          <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-            <AuthProvider>
-              <CacheOwnerGuard />
+      <ThemeProvider value={NAV_THEME[colorScheme ?? 'light']}>
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+          <AuthProvider>
+            <CacheOwnerGuard />
+            {/* 시트 내용은 Portal로 이 Provider 자리에서 그려지므로 앱의 다른 Provider 안쪽에 둔다. */}
+            <BottomSheetModalProvider>
               <RootNavigator />
-            </AuthProvider>
-          </PersistQueryClientProvider>
-          <ToastHost />
-        </ThemeProvider>
-      </BottomSheetModalProvider>
+            </BottomSheetModalProvider>
+          </AuthProvider>
+        </PersistQueryClientProvider>
+        {/* 시트 host(Provider 맨 뒤)보다 나중에 그려야 열린 시트 위에 토스트가 보인다. */}
+        <ToastHost />
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }
