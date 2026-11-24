@@ -2,9 +2,12 @@
 //
 // 실제 라이브러리 동작 중 이 목이 흉내 내는 것:
 // - present()로 children을 보이고, dismiss()로 숨긴 뒤 onDismiss를 동기로 부른다(애니메이션 없음).
+// - 닫기가 시작되면 onAnimate(fromIndex, -1)을, present()로 올라가기 시작하면 onAnimate(-1, 0)을 부른다
+//   (라이브러리는 닫는 애니메이션 시작 때 onAnimate를, 끝날 때 onChange(-1)를 부른다).
 // - holdSheetDismissals() 동안은 dismiss() 뒤 onDismiss를 미뤄 닫는 애니메이션 도중을 만든다.
-//   그동안은 dismiss()를 부른 때의 children을 그대로 그린다(라이브러리는 닫는 중에 Portal 갱신을 멈춘다).
-//   그래서 시트를 닫는 렌더에서 내용을 바꾸면 닫는 동안 바뀐 내용이 보이는 것까지 드러난다.
+//   코드 dismiss()의 닫기 동안은 dismiss()를 부른 때의 children을 그대로 그린다(라이브러리는 DISMISSING 상태에서
+//   Portal 갱신을 멈춘다). 그래서 시트를 닫는 렌더에서 내용을 바꾸면 닫는 동안 바뀐 내용이 보이는 것까지 드러난다.
+//   사용자 닫기(배경·끌어 닫기, dismissSheetByUser)는 DISMISSING이 아니라서 닫는 동안에도 내용이 갱신된다.
 // - 닫는 중에 present()가 와도 그 닫기는 끝까지 가고 onDismiss가 늦게 온다.
 // - 올라와 있던 모달이 언마운트되면 닫고(마이크로태스크 뒤, 미루기 중이면 release 때) 마지막 onDismiss를 부른다.
 // 흉내 내지 않는 것: 애니메이션·스냅 지점·동적 높이(Sheet가 쓰는 present/dismiss만 있다), 제스처,
@@ -14,7 +17,7 @@ import { act } from '@testing-library/react-native';
 import * as React from 'react';
 import { ScrollView, TextInput } from 'react-native';
 
-type Entry = { dismiss: () => void; closing: boolean };
+type Entry = { dismissByUser: () => void; closing: boolean };
 
 // 지금 올라와 있는 모달들(나중에 올라온 것이 뒤). 사용자 닫기 helper가 맨 뒤 것을 닫는다.
 const presented: Entry[] = [];
@@ -29,7 +32,16 @@ function removeEntry(entry: Entry | null) {
   if (i >= 0) presented.splice(i, 1);
 }
 
-type ModalProps = { children?: React.ReactNode; onDismiss?: () => void };
+type ModalProps = {
+  children?: React.ReactNode;
+  onDismiss?: () => void;
+  onAnimate?: (
+    fromIndex: number,
+    toIndex: number,
+    fromPosition: number,
+    toPosition: number
+  ) => void;
+};
 
 export const BottomSheetModal = React.forwardRef<unknown, ModalProps>(
   function BottomSheetModal(props, ref) {
@@ -39,10 +51,12 @@ export const BottomSheetModal = React.forwardRef<unknown, ModalProps>(
     const entry = React.useRef<Entry | null>(null);
     // 미뤄 둔 onDismiss도 그때의 최신 콜백을 부르게 한다.
     const onDismissRef = React.useRef(props.onDismiss);
+    const onAnimateRef = React.useRef(props.onAnimate);
     // dismiss()는 부모의 effect에서 불리므로, 이 레이아웃 effect가 이미 그 렌더의 children을 담아 둔다.
     const childrenRef = React.useRef(props.children);
     React.useLayoutEffect(() => {
       onDismissRef.current = props.onDismiss;
+      onAnimateRef.current = props.onAnimate;
       childrenRef.current = props.children;
     });
     React.useImperativeHandle(ref, () => {
@@ -55,23 +69,26 @@ export const BottomSheetModal = React.forwardRef<unknown, ModalProps>(
         setFrozen(null);
         onDismissRef.current?.();
       };
-      const dismiss = () => {
+      const close = (byUser: boolean) => {
         const current = entry.current;
         if (!current || current.closing) return;
         current.closing = true;
         closingCount++;
-        if (holding) {
-          setFrozen({ children: childrenRef.current });
-          held.push(() => finish(current));
-        } else finish(current);
+        // 코드 dismiss()만 Portal 갱신을 멈춘다.
+        if (holding && !byUser) setFrozen({ children: childrenRef.current });
+        onAnimateRef.current?.(0, -1, 0, 0);
+        if (holding) held.push(() => finish(current));
+        else finish(current);
       };
+      const dismiss = () => close(false);
       return {
         // 닫는 중에 present()가 와도 라이브러리처럼 그 닫기는 끝까지 간다(늦은 onDismiss).
         present: () => {
           if (entry.current) return;
-          entry.current = { dismiss: () => dismiss(), closing: false };
+          entry.current = { dismissByUser: () => close(true), closing: false };
           presented.push(entry.current);
           setVisible(true);
+          onAnimateRef.current?.(-1, 0, 0, 0);
         },
         dismiss,
       };
@@ -110,7 +127,7 @@ export async function dismissSheetByUser(): Promise<void> {
   const top = presented[presented.length - 1];
   if (!top) throw new Error('올라와 있는 bottom sheet가 없다');
   await act(async () => {
-    top.dismiss();
+    top.dismissByUser();
   });
 }
 

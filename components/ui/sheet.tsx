@@ -55,6 +55,7 @@ type SheetProps = {
  * 사용자가 끌어 닫거나 배경·뒤로가기로 닫으면 onOpenChange(false)를 한 번 부른다(코드가 닫은 경우는 부르지 않는다).
  * children은 열린 순간부터 닫는 애니메이션이 끝날 때까지만 그리고, 닫는 동안에는 눌리지 않는다
  * (라이브러리는 닫는 중에도 터치를 막지 않아 두 번 누르면 같은 동작이 반복된다).
+ * 코드 닫기는 open=false로, 사용자 닫기(배경·끌어 닫기)는 닫는 애니메이션 시작(onAnimate → -1)으로 막는다.
  * 높이는 내용을 따른다. 길어질 수 있는 내용은 scrollable로 연다.
  */
 function Sheet({ open, onOpenChange, children, onClosed, scrollable }: SheetProps) {
@@ -74,6 +75,8 @@ function Sheet({ open, onOpenChange, children, onClosed, scrollable }: SheetProp
     };
   }, []);
   const [shown, setShown] = React.useState(open);
+  // 닫는 애니메이션이 시작됐는지(onAnimate → -1). 사용자 닫기는 onDismiss 전까지 open이 true라서 이것으로 터치를 막는다.
+  const [closing, setClosing] = React.useState(false);
   if (open && !shown) setShown(true);
   const { bottom } = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -102,8 +105,14 @@ function Sheet({ open, onOpenChange, children, onClosed, scrollable }: SheetProp
     return () => sub.remove();
   }, [open, onOpenChange]);
 
+  const onAnimate = (_from: number, toIndex: number) => {
+    // 끌다가 놓아 제자리로 돌아오면(toIndex >= 0) 다시 누를 수 있다.
+    setClosing(toIndex === -1);
+  };
+
   const onDismiss = () => {
     if (!mountedRef.current) return;
+    setClosing(false);
     presentedRef.current = false;
     const byCode = closingByCodeRef.current;
     closingByCodeRef.current = false;
@@ -122,7 +131,7 @@ function Sheet({ open, onOpenChange, children, onClosed, scrollable }: SheetProp
 
   const content = (
     <View
-      pointerEvents={open ? 'auto' : 'none'}
+      pointerEvents={open && !closing ? 'auto' : 'none'}
       className="gap-4 px-6 pt-2"
       style={{ paddingBottom: bottom + 16 }}>
       {shown ? children : null}
@@ -135,6 +144,7 @@ function Sheet({ open, onOpenChange, children, onClosed, scrollable }: SheetProp
       enableDynamicSizing
       maxDynamicContentSize={scrollable ? Math.round(height * 0.8) : undefined}
       onDismiss={onDismiss}
+      onAnimate={onAnimate}
       backdropComponent={renderBackdrop}
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"

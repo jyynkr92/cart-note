@@ -185,6 +185,23 @@ describe('Sheet', () => {
     await release();
   });
 
+  it('content is not touchable while a user close (backdrop, drag) animates', async () => {
+    const press = jest.fn();
+    await render(
+      <Sheet open onOpenChange={jest.fn()}>
+        <Pressable accessibilityRole="button" accessibilityLabel="저장" onPress={press} />
+      </Sheet>
+    );
+    const release = holdSheetDismissals();
+    // 부모의 open은 onDismiss가 와야 바뀌므로, 닫기 시작(onAnimate → -1)만으로 막혀야 한다.
+    await dismissSheetByUser();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await fireEvent.press(screen.getByRole('button', { name: '저장' }));
+    warn.mockRestore();
+    expect(press).not.toHaveBeenCalled();
+    await release();
+  });
+
   it('a reopen during a programmatic close re-presents without calling onClosed', async () => {
     const onClosed = jest.fn();
     const sheet = (open: boolean) => (
@@ -436,6 +453,21 @@ describe('ConfirmSheet', () => {
     await rerender(renderConfirm(true, onConfirm, onCancel));
     await dismissSheetByUser();
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirm does nothing while a user close animates; the close counts as cancel', async () => {
+    const onConfirm = jest.fn();
+    const onCancel = jest.fn();
+    await render(renderConfirm(true, onConfirm, onCancel));
+    const release = holdSheetDismissals();
+    await dismissSheetByUser();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
+    warn.mockRestore();
+    expect(onConfirm).not.toHaveBeenCalled();
+    await release();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it('pressing confirm twice calls onConfirm once', async () => {
