@@ -32,12 +32,20 @@ export async function insertList(row: {
   familyId: string;
   name: string;
   kind: ListKind;
+  /** 이 값이 없던 버전에서 영속화된 변수는 DB 기본값을 쓴다. */
+  sortOrder?: number;
 }): Promise<void> {
   check(
     await supabase
       .from('lists')
       .upsert(
-        { id: row.id, family_id: row.familyId, name: row.name, kind: row.kind },
+        {
+          id: row.id,
+          family_id: row.familyId,
+          name: row.name,
+          kind: row.kind,
+          ...(row.sortOrder === undefined ? {} : { sort_order: row.sortOrder }),
+        },
         { onConflict: 'id', ignoreDuplicates: true }
       )
   );
@@ -50,4 +58,12 @@ export async function renameList(id: string, name: string): Promise<void> {
 /** inbox 목록은 DB 트리거가 거부한다. 오류는 그대로 던진다. */
 export async function deleteList(id: string): Promise<void> {
   check(await supabase.from('lists').delete().eq('id', id));
+}
+
+/**
+ * 목록 순서를 한 번에 저장한다(RPC). ids 순서대로 inbox가 아닌 목록에 1..k를 쓰고, 모르는·다른 그룹·지워진·inbox id는
+ * 건너뛰며, ids에 없는 목록은 기존 (sort_order, created_at, id) 순서로 뒤에 붙인다.
+ */
+export async function reorderLists(familyId: string, ids: string[]): Promise<void> {
+  check(await supabase.rpc('reorder_lists', { p_family_id: familyId, p_ids: ids }));
 }

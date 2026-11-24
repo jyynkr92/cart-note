@@ -1,9 +1,10 @@
-import { deleteList, fetchLists, insertList, renameList } from '@/src/lists/list-api';
+import { deleteList, fetchLists, insertList, renameList, reorderLists } from '@/src/lists/list-api';
 import { supabase } from '@/src/lib/supabase';
 import { chain } from '@/test-utils/supabase-chain';
 
-jest.mock('@/src/lib/supabase', () => ({ supabase: { from: jest.fn() } }));
+jest.mock('@/src/lib/supabase', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
 const from = supabase.from as jest.Mock;
+const rpc = supabase.rpc as jest.Mock;
 
 function mockQuery(result: unknown) {
   const c = chain(result);
@@ -43,7 +44,21 @@ describe('fetchLists', () => {
 });
 
 describe('insertList', () => {
-  it('inserts with ON CONFLICT DO NOTHING', async () => {
+  it('sends the sort_order carried in the variables', async () => {
+    const calls = mockQuery({ error: null });
+    await insertList({ id: 'l1', familyId: 'f1', name: '코스트코', kind: 'store', sortOrder: 4 });
+    expect(calls).toEqual([
+      [
+        'upsert',
+        [
+          { id: 'l1', family_id: 'f1', name: '코스트코', kind: 'store', sort_order: 4 },
+          { onConflict: 'id', ignoreDuplicates: true },
+        ],
+      ],
+    ]);
+  });
+
+  it('inserts with ON CONFLICT DO NOTHING (variables persisted before sortOrder leave it to the default)', async () => {
     const calls = mockQuery({ error: null });
     await insertList({ id: 'l1', familyId: 'f1', name: '코스트코', kind: 'store' });
     expect(calls).toEqual([
@@ -84,5 +99,18 @@ describe('deleteList', () => {
     ]);
     mockQuery({ error: { message: 'inbox list cannot be deleted' } });
     await expect(deleteList('l1')).rejects.toEqual({ message: 'inbox list cannot be deleted' });
+  });
+});
+
+describe('reorderLists', () => {
+  it('calls the reorder_lists rpc with the family and ids', async () => {
+    rpc.mockResolvedValue({ data: null, error: null });
+    await reorderLists('f1', ['l2', 'l1']);
+    expect(rpc).toHaveBeenCalledWith('reorder_lists', { p_family_id: 'f1', p_ids: ['l2', 'l1'] });
+  });
+
+  it('throws on error', async () => {
+    rpc.mockResolvedValue({ data: null, error: { message: 'not_member' } });
+    await expect(reorderLists('f1', ['l1'])).rejects.toEqual({ message: 'not_member' });
   });
 });
