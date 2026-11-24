@@ -1,5 +1,6 @@
+import type * as React from 'react';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
-import { BackHandler, Pressable, Text } from 'react-native';
+import { BackHandler, Pressable, Text, View } from 'react-native';
 import { inputClassName } from '@/components/ui/input';
 import {
   ConfirmSheet,
@@ -271,6 +272,51 @@ describe('Sheet', () => {
       </Sheet>
     );
     expect(activeBackHandlers()).toHaveLength(0);
+  });
+});
+
+describe('Sheet content container', () => {
+  // 실제 라이브러리는 BottomSheetView의 레이아웃과 BottomSheetScrollView의 내용 크기를 같은 contentHeight에 쓴다.
+  // 둘을 겹치면 안쪽 스크롤 영역 크기로 시트가 줄어든다(Jest에서는 높이를 잴 수 없어 구조로 본다).
+  function markContainers() {
+    const lib = jest.requireMock<typeof BottomSheetMock>('@gorhom/bottom-sheet');
+    const mark = (testID: string) =>
+      function Marked({ children }: { children?: React.ReactNode }) {
+        return <View testID={testID}>{children}</View>;
+      };
+    jest.spyOn(lib, 'BottomSheetView').mockImplementation(mark('sheet-view'));
+    jest
+      .spyOn(lib, 'BottomSheetScrollView')
+      .mockImplementation(mark('sheet-scroll') as unknown as typeof lib.BottomSheetScrollView);
+  }
+
+  it('a plain sheet uses BottomSheetView only', async () => {
+    markContainers();
+    await render(
+      <Sheet open onOpenChange={jest.fn()}>
+        <Text>내용</Text>
+      </Sheet>
+    );
+    expect(screen.getByTestId('sheet-view')).toContainElement(screen.getByText('내용'));
+    expect(screen.queryByTestId('sheet-scroll')).toBeNull();
+  });
+
+  it('a menu is one scrollable as the whole sheet content, with no BottomSheetView around it', async () => {
+    markContainers();
+    await render(
+      <MenuSheet
+        items={[{ label: '이름 바꾸기', onPress: jest.fn() }]}
+        trigger={(open) => (
+          <Pressable accessibilityRole="button" accessibilityLabel="목록 메뉴" onPress={open} />
+        )}
+      />
+    );
+    await fireEvent.press(screen.getByRole('button', { name: '목록 메뉴' }));
+    expect(screen.getAllByTestId('sheet-scroll')).toHaveLength(1);
+    expect(screen.queryByTestId('sheet-view')).toBeNull();
+    const scroll = screen.getByTestId('sheet-scroll');
+    expect(scroll).toContainElement(screen.getByRole('menuitem', { name: '이름 바꾸기' }));
+    expect(scroll).toContainElement(screen.getByRole('button', { name: '취소' }));
   });
 });
 

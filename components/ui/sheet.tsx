@@ -41,6 +41,13 @@ type SheetProps = {
    * 코드로 닫는 도중에 부모가 다시 열어 시트를 다시 올리는 경우에는 부르지 않는다.
    */
   onClosed?: () => void;
+  /**
+   * 내용 전체를 스크롤 영역(BottomSheetScrollView)으로 그린다. 항목 수가 늘어날 수 있는 시트(메뉴, 목록 선택)에 쓴다.
+   * 높이는 내용에 맞추되 화면의 80%를 넘으면 그 높이에서 멈추고 스크롤된다.
+   * 시트 안에 스크롤 영역을 따로 넣지 않는다: 라이브러리는 BottomSheetView의 레이아웃과
+   * 스크롤 영역의 내용 크기를 같은 contentHeight에 써서, 안쪽 스크롤 영역 크기로 시트가 줄어든다.
+   */
+  scrollable?: boolean;
 };
 
 /**
@@ -48,9 +55,9 @@ type SheetProps = {
  * 사용자가 끌어 닫거나 배경·뒤로가기로 닫으면 onOpenChange(false)를 한 번 부른다(코드가 닫은 경우는 부르지 않는다).
  * children은 열린 순간부터 닫는 애니메이션이 끝날 때까지만 그리고, 닫는 동안에는 눌리지 않는다
  * (라이브러리는 닫는 중에도 터치를 막지 않아 두 번 누르면 같은 동작이 반복된다).
- * 높이는 내용을 따르되 화면 높이의 80%를 넘지 않는다. 긴 내용은 SheetScrollArea에 넣는다.
+ * 높이는 내용을 따른다. 길어질 수 있는 내용은 scrollable로 연다.
  */
-function Sheet({ open, onOpenChange, children, onClosed }: SheetProps) {
+function Sheet({ open, onOpenChange, children, onClosed, scrollable }: SheetProps) {
   const ref = React.useRef<BottomSheetModal>(null);
   // 최신 open. 늦게 온 onDismiss가 그 사이 다시 열린 시트를 닫지 않게 한다.
   const openRef = React.useRef(open);
@@ -113,11 +120,20 @@ function Sheet({ open, onOpenChange, children, onClosed }: SheetProps) {
     onClosed?.();
   };
 
+  const content = (
+    <View
+      pointerEvents={open ? 'auto' : 'none'}
+      className="gap-4 px-6 pt-2"
+      style={{ paddingBottom: bottom + 16 }}>
+      {shown ? children : null}
+    </View>
+  );
+
   return (
     <BottomSheetModal
       ref={ref}
       enableDynamicSizing
-      maxDynamicContentSize={Math.round(height * 0.8)}
+      maxDynamicContentSize={scrollable ? Math.round(height * 0.8) : undefined}
       onDismiss={onDismiss}
       backdropComponent={renderBackdrop}
       keyboardBehavior="interactive"
@@ -125,14 +141,11 @@ function Sheet({ open, onOpenChange, children, onClosed }: SheetProps) {
       android_keyboardInputMode="adjustResize"
       backgroundStyle={{ backgroundColor: theme.background }}
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}>
-      <BottomSheetView>
-        <View
-          pointerEvents={open ? 'auto' : 'none'}
-          className="gap-4 px-6 pt-2"
-          style={{ paddingBottom: bottom + 16 }}>
-          {shown ? children : null}
-        </View>
-      </BottomSheetView>
+      {scrollable ? (
+        <BottomSheetScrollView>{content}</BottomSheetScrollView>
+      ) : (
+        <BottomSheetView>{content}</BottomSheetView>
+      )}
     </BottomSheetModal>
   );
 }
@@ -169,19 +182,6 @@ function SheetDescription({ className, children }: SheetPartProps) {
 /** 버튼을 화면 폭 전체로 세로로 쌓는다(주 동작을 위에, 취소를 아래에 둔다). */
 function SheetFooter({ className, children }: SheetPartProps) {
   return <View className={cn('w-full flex-col gap-2', className)}>{children}</View>;
-}
-
-/**
- * 시트 안에서 길어질 수 있는 목록(메뉴 항목, 목록 선택 버튼)을 담는 스크롤 영역.
- * 화면 높이의 절반까지만 차지해 아래 버튼(취소 등)이 늘 보이게 한다.
- */
-function SheetScrollArea({ className, children }: SheetPartProps) {
-  const { height } = useWindowDimensions();
-  return (
-    <BottomSheetScrollView style={{ maxHeight: Math.round(height * 0.5) }}>
-      <View className={className}>{children}</View>
-    </BottomSheetScrollView>
-  );
 }
 
 /** 시트 안의 입력 칸. BottomSheetTextInput이어야 키보드를 따라 시트가 올라간다. */
@@ -302,8 +302,8 @@ function MenuSheet({ trigger, items }: MenuSheetProps) {
   return (
     <>
       {trigger(show)}
-      <Sheet open={open} onOpenChange={setOpen} onClosed={onClosed}>
-        <SheetScrollArea className="-mx-2">
+      <Sheet open={open} onOpenChange={setOpen} onClosed={onClosed} scrollable>
+        <View className="-mx-2">
           {items.map((item, i) =>
             item === 'separator' ? (
               <View key={`separator-${i}`} className="mx-2 my-1 h-px bg-border" />
@@ -331,7 +331,7 @@ function MenuSheet({ trigger, items }: MenuSheetProps) {
               </Pressable>
             )
           )}
-        </SheetScrollArea>
+        </View>
         <Button
           variant="outline"
           onPress={() => {
@@ -353,7 +353,6 @@ export {
   SheetFooter,
   SheetHeader,
   SheetInput,
-  SheetScrollArea,
   SheetTitle,
   useLastWhileOpen,
 };
