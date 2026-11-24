@@ -5,7 +5,7 @@ import { useIsRestoring } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useEffect } from 'react';
 import { ThemeProvider } from 'expo-router/react-navigation';
-import { PortalHost } from '@rn-primitives/portal';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -79,10 +79,13 @@ export default function RootLayout() {
         <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
           <AuthProvider>
             <CacheOwnerGuard />
-            <RootNavigator />
+            {/* 시트 내용은 Portal로 이 Provider 자리에서 그려지므로 앱의 다른 Provider 안쪽에 둔다. */}
+            <BottomSheetModalProvider>
+              <RootNavigator />
+            </BottomSheetModalProvider>
           </AuthProvider>
         </PersistQueryClientProvider>
-        <PortalHost />
+        {/* 시트 host(Provider 맨 뒤)보다 나중에 그려야 열린 시트 위에 토스트가 보인다. */}
         <ToastHost />
       </ThemeProvider>
     </GestureHandlerRootView>

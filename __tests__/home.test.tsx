@@ -1,14 +1,20 @@
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PortalHost } from '@rn-primitives/portal';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
+import { Keyboard } from 'react-native';
 import AppLayout from '@/app/(app)/_layout';
 import Home from '@/app/(app)/index';
-import { fetchFamilyMembers, fetchMyFamilies, renameFamily, type Family } from '@/src/groups/group-api';
+import {
+  fetchFamilyMembers,
+  fetchMyFamilies,
+  renameFamily,
+  type Family,
+} from '@/src/groups/group-api';
 import { resetCurrentGroupStore } from '@/src/groups/current-group-store';
 import { fetchLists, insertList, type List } from '@/src/lists/list-api';
 import { createQueryClient } from '@/src/lib/query-client';
+import { toast } from '@/src/lib/toast';
 import { disposeClient } from '@/test-utils/dispose-client';
 
 const mockPush = jest.fn();
@@ -70,12 +76,7 @@ const lists = fetchLists as jest.Mock;
 
 let client: QueryClient;
 const renderWithClient = (ui: ReactElement) =>
-  render(
-    <QueryClientProvider client={client}>
-      {ui}
-      <PortalHost />
-    </QueryClientProvider>
-  );
+  render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -100,9 +101,7 @@ it('shows the inbox first, then lists by sort_order, with counts and the locatio
   ]);
   await renderWithClient(<Home />);
   await screen.findByText('이마트');
-  const names = screen
-    .getAllByTestId('list-card-name')
-    .map((n) => n.props.children);
+  const names = screen.getAllByTestId('list-card-name').map((n) => n.props.children);
   expect(names).toEqual(['사야할것', '쿠팡', '이마트']);
   expect(screen.getByText('3개 남음')).toBeTruthy();
   expect(screen.getByText('5개 남음')).toBeTruthy();
@@ -190,7 +189,9 @@ describe('group switcher', () => {
     await fireEvent.press(await screen.findByText('우리집 ▾'));
     await fireEvent.press(await screen.findByText('회사'));
     expect(await screen.findByText('회사 ▾')).toBeTruthy();
-    await waitFor(async () => expect(await AsyncStorage.getItem('cart-note-current-group')).toBe('g2'));
+    await waitFor(async () =>
+      expect(await AsyncStorage.getItem('cart-note-current-group')).toBe('g2')
+    );
   });
 
   it('navigates to the join screen', async () => {
@@ -201,7 +202,7 @@ describe('group switcher', () => {
     expect(mockPush).toHaveBeenCalledWith('/join');
   });
 
-  it('renames through a dialog and blocks a whitespace-only name', async () => {
+  it('renames through a sheet and blocks a whitespace-only name', async () => {
     families.mockResolvedValue([G1, G2]);
     (renameFamily as jest.Mock).mockResolvedValue(undefined);
     await renderWithClient(<Home />);
@@ -216,6 +217,26 @@ describe('group switcher', () => {
     await fireEvent.press(screen.getByText('저장'));
     await waitFor(() => expect(renameFamily).toHaveBeenCalledWith('g1', '새 이름'));
     await waitFor(() => expect(families).toHaveBeenCalledTimes(2)); // families 무효화 → 재조회
+  });
+
+  it('a failed rename hides the keyboard before the error toast and keeps the sheet open', async () => {
+    // 토스트는 화면 아래에 떠서, 입력 칸이 열린 채면 iOS 키보드에 가린다.
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    families.mockResolvedValue([G1, G2]);
+    (renameFamily as jest.Mock).mockRejectedValueOnce(new Error('network'));
+    await renderWithClient(<Home />);
+    await fireEvent.press(await screen.findByText('우리집 ▾'));
+    await fireEvent.press(await screen.findByText('이름 변경'));
+    const input = await screen.findByPlaceholderText('그룹 이름');
+    await fireEvent.changeText(input, '새 이름');
+    await fireEvent.press(screen.getByText('저장'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('이름을 바꾸지 못했어요'));
+    expect(dismiss).toHaveBeenCalled();
+    expect(dismiss.mock.invocationCallOrder[0]).toBeLessThan(
+      (toast.error as jest.Mock).mock.invocationCallOrder[0]
+    );
+    expect(screen.getByPlaceholderText('그룹 이름')).toBeTruthy();
+    dismiss.mockRestore();
   });
 });
 
@@ -268,7 +289,9 @@ describe('add list', () => {
     await fireEvent.changeText(await screen.findByPlaceholderText('목록 이름'), '쿠팡');
     await fireEvent.press(screen.getByText('저장'));
     await waitFor(() =>
-      expect(insertList).toHaveBeenCalledWith(expect.objectContaining({ name: '쿠팡', kind: 'online' }))
+      expect(insertList).toHaveBeenCalledWith(
+        expect.objectContaining({ name: '쿠팡', kind: 'online' })
+      )
     );
   });
 });

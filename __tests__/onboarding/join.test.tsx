@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { PortalHost } from '@rn-primitives/portal';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Join from '@/app/(auth)/join';
 import { loadEmptySoloGroups } from '@/src/groups/empty-group-cleanup';
@@ -9,6 +8,7 @@ import { clearPendingInvite, getPendingInvite } from '@/src/onboarding/pending-i
 import { CURRENT_GROUP_KEY, resetCurrentGroupStore } from '@/src/groups/current-group-store';
 import { toast } from '@/src/lib/toast';
 import { qk } from '@/src/lib/query-keys';
+import { dismissSheetByUser } from '@/test-utils/bottom-sheet';
 import { nodeAfterInput } from '@/test-utils/host-order';
 
 const mockReplace = jest.fn();
@@ -43,7 +43,6 @@ const renderJoin = () =>
   render(
     <QueryClientProvider client={(testClient = new QueryClient())}>
       <Join />
-      <PortalHost />
     </QueryClientProvider>
   );
 
@@ -165,6 +164,17 @@ describe('empty solo group cleanup', () => {
     expect(loadEmptySoloGroups).toHaveBeenCalledWith('j');
   });
 
+  it('disables [삭제] while the group is being deleted', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
+    let resolve!: (v: boolean) => void;
+    (deleteFamilyIfEmpty as jest.Mock).mockReturnValue(new Promise<boolean>((r) => (resolve = r)));
+    await submit();
+    await fireEvent.press(await screen.findByRole('button', { name: '삭제' }));
+    expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled();
+    await act(async () => resolve(true));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+  });
+
   it('does not leave on [유지]', async () => {
     (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'solo', name: '내 장보기' }]);
     await submit();
@@ -217,5 +227,74 @@ describe('empty solo group cleanup', () => {
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
     expect(deleteFamilyIfEmpty).toHaveBeenCalledTimes(1);
     expect(deleteFamilyIfEmpty).toHaveBeenCalledWith('a');
+  });
+
+  it('deleting an empty group answers true once and never false', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([
+      { id: 'a', name: '하나' },
+      { id: 'b', name: '둘' },
+    ]);
+    (deleteFamilyIfEmpty as jest.Mock).mockResolvedValue(true);
+    await submit();
+    await fireEvent.press(await screen.findByText('삭제'));
+    // 다음 그룹 질문이 새 시트로 뜨고, 앞 그룹은 한 번만 지운다.
+    expect(await screen.findByText("비어 있는 '둘' 그룹을 삭제할까요?")).toBeTruthy();
+    expect(deleteFamilyIfEmpty).toHaveBeenCalledTimes(1);
+    expect(deleteFamilyIfEmpty).toHaveBeenCalledWith('a');
+    // 확인한 시트가 다음 질문까지 이어져 취소가 막히지 않는다.
+    await fireEvent.press(screen.getByText('유지'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(deleteFamilyIfEmpty).toHaveBeenCalledTimes(1);
+  });
+
+  it('dismissing the cleanup sheet keeps the group (answers false once)', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([
+      { id: 'a', name: '하나' },
+      { id: 'b', name: '둘' },
+    ]);
+    await submit();
+    await screen.findByText("비어 있는 '하나' 그룹을 삭제할까요?");
+    await dismissSheetByUser();
+    // 끌어 닫으면 유지로 답하고 다음 그룹을 한 번만 묻는다.
+    expect(await screen.findByText("비어 있는 '둘' 그룹을 삭제할까요?")).toBeTruthy();
+    expect(deleteFamilyIfEmpty).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+    await dismissSheetByUser();
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(deleteFamilyIfEmpty).not.toHaveBeenCalled();
+  });
+
+  it('keeping the last group finishes exactly once even when the old sheet unmounts', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([{ id: 'a', name: '하나' }]);
+    await submit();
+    await fireEvent.press(await screen.findByText('유지'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(deleteFamilyIfEmpty).not.toHaveBeenCalled();
+  });
+
+  it('keeping a middle group does not bring its question back', async () => {
+    (loadEmptySoloGroups as jest.Mock).mockResolvedValue([
+      { id: 'a', name: '하나' },
+      { id: 'b', name: '둘' },
+      { id: 'c', name: '셋' },
+    ]);
+    await submit();
+    await fireEvent.press(await screen.findByText('유지'));
+    expect(await screen.findByText("비어 있는 '둘' 그룹을 삭제할까요?")).toBeTruthy();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // 늦게 온 닫기가 둘째 질문을 건너뛰게 하지 않는다.
+    expect(screen.getByText("비어 있는 '둘' 그룹을 삭제할까요?")).toBeTruthy();
+    await fireEvent.press(screen.getByText('유지'));
+    expect(await screen.findByText("비어 있는 '셋' 그룹을 삭제할까요?")).toBeTruthy();
+    await fireEvent.press(screen.getByText('유지'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/'));
+    expect(mockReplace).toHaveBeenCalledTimes(1);
   });
 });

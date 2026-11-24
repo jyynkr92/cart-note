@@ -24,6 +24,33 @@ module.exports = defineConfig([
     },
   },
   {
+    files: ['**/*.ts', '**/*.tsx'],
+    ignores: ['components/ui/sheet.tsx', 'test-utils/**', '__tests__/**'],
+    rules: {
+      // 시트 안에 라이브러리 스크롤 영역을 따로 넣으면 BottomSheetView와 contentHeight를 서로 덮어써
+      // 시트 높이가 잘린다(docs/solutions 참고). 시트 내용 컨테이너는 components/ui/sheet.tsx만 고른다.
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@gorhom/bottom-sheet',
+              importNames: [
+                'BottomSheetView',
+                'BottomSheetScrollView',
+                'BottomSheetFlatList',
+                'BottomSheetSectionList',
+                'BottomSheetVirtualizedList',
+              ],
+              message:
+                '시트 내용 컨테이너는 components/ui/sheet.tsx가 정한다. 목록이 길면 <Sheet scrollable>을 쓴다.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     rules: {
       // React Compiler 전용 규칙. 이 앱은 컴파일러를 켜지 않았고, 걸리는 곳(온보딩 상태, 선택 초기화 등)은
       // 리뷰를 거친 의도된 패턴이다. 고치는 일은 후속 작업으로 두고 지금은 경고로만 보여 준다.

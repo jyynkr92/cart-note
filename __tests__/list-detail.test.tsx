@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PortalHost } from '@rn-primitives/portal';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import ListDetail from '@/app/(app)/list/[id]/index';
@@ -100,7 +99,6 @@ const renderWithClient = (ui: ReactElement) =>
   render(
     <QueryClientProvider client={client}>
       {ui}
-      <PortalHost />
     </QueryClientProvider>
   );
 
@@ -183,7 +181,7 @@ describe('items', () => {
     await waitFor(() => expect(deleteItems).toHaveBeenCalledWith(['i1']));
   });
 
-  it('edits the name and note from the edit dialog', async () => {
+  it('edits the name and note from the edit sheet', async () => {
     items.mockResolvedValue([item({ id: 'i1', name: '우유' })]);
     await renderWithClient(<ListDetail />);
     await fireEvent.press(await screen.findByText('우유'));

@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PortalHost } from '@rn-primitives/portal';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { BackHandler } from 'react-native';
 import type { ReactElement } from 'react';
@@ -11,6 +10,7 @@ import { deleteItems, fetchItems, moveItems, updateItem, type Item } from '@/src
 import { fetchLists, type List } from '@/src/lists/list-api';
 import { createQueryClient } from '@/src/lib/query-client';
 import { qk } from '@/src/lib/query-keys';
+import { closingSheetCount, holdSheetDismissals } from '@/test-utils/bottom-sheet';
 import { disposeClient } from '@/test-utils/dispose-client';
 
 // 제스처는 시뮬레이션하지 않는다. 오른쪽 액션을 항상 그린다(비활성이면 renderRightActions가 없다).
@@ -91,7 +91,6 @@ let client: QueryClient;
 const tree = (ui: ReactElement) => (
   <QueryClientProvider client={client}>
     {ui}
-    <PortalHost />
   </QueryClientProvider>
 );
 const renderWithClient = (ui: ReactElement) => render(tree(ui));
@@ -281,6 +280,21 @@ describe('delete selected', () => {
     await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
     await waitFor(() => expect(deleteItems).toHaveBeenCalledWith(['i1', 'i2']));
     await waitFor(() => expect(screen.queryByText(/개 선택됨/)).toBeNull());
+  });
+
+  it('keeps the original count in the confirmation while it closes', async () => {
+    await renderWithClient(<ListDetail />);
+    await longPress('우유');
+    await fireEvent.press(await screen.findByText('빵'));
+    await fireEvent.press(await screen.findByRole('button', { name: '선택 항목 삭제' }));
+    expect(await screen.findByText('2개 항목을 삭제할까요?')).toBeTruthy();
+    const release = holdSheetDismissals();
+    await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
+    expect(closingSheetCount()).toBe(1);
+    expect(screen.getByText('2개 항목을 삭제할까요?')).toBeTruthy();
+    expect(screen.queryByText('0개 항목을 삭제할까요?')).toBeNull();
+    await release();
+    expect(screen.queryByText(/개 항목을 삭제할까요/)).toBeNull();
   });
 
   it('closes the confirmation when the selected items disappear', async () => {
