@@ -199,7 +199,7 @@ describe('group switcher', () => {
     expect(mockPush).toHaveBeenCalledWith('/join');
   });
 
-  it('renames through a dialog and blocks a whitespace-only name', async () => {
+  it('renames through a sheet and blocks a whitespace-only name', async () => {
     families.mockResolvedValue([G1, G2]);
     (renameFamily as jest.Mock).mockResolvedValue(undefined);
     await renderWithClient(<Home />);

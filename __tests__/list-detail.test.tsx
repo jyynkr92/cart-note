@@ -181,7 +181,7 @@ describe('items', () => {
     await waitFor(() => expect(deleteItems).toHaveBeenCalledWith(['i1']));
   });
 
-  it('edits the name and note from the edit dialog', async () => {
+  it('edits the name and note from the edit sheet', async () => {
     items.mockResolvedValue([item({ id: 'i1', name: '우유' })]);
     await renderWithClient(<ListDetail />);
     await fireEvent.press(await screen.findByText('우유'));

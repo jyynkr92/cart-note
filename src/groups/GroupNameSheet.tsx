@@ -20,12 +20,12 @@ import { useRenameFamily } from './use-groups';
 export type GroupNameMode = 'rename' | 'create';
 
 /**
- * 그룹 이름 변경 / 새 그룹 만들기 대화상자. 홈의 그룹 전환 메뉴와 설정 화면이 함께 쓴다.
+ * 그룹 이름 변경 / 새 그룹 만들기 시트. 홈의 그룹 전환 메뉴와 설정 화면이 함께 쓴다.
  * 새 그룹을 만들면 그 그룹을 현재 그룹으로 고른다.
  */
-export function useGroupNameDialog(family: Family | null): {
+export function useGroupNameSheet(family: Family | null): {
   open: (mode: GroupNameMode) => void;
-  dialog: ReactElement;
+  sheet: ReactElement;
 } {
   const qc = useQueryClient();
   const { setFamilyId } = useCurrentGroupStore();
@@ -66,7 +66,7 @@ export function useGroupNameDialog(family: Family | null): {
     }
   }
 
-  const dialog = (
+  const sheet = (
     <Sheet open={mode !== null} onOpenChange={(o) => !o && setMode(null)}>
       <SheetHeader>
         <SheetTitle>{shownMode === 'rename' ? '그룹 이름 변경' : '새 그룹'}</SheetTitle>
@@ -86,5 +86,5 @@ export function useGroupNameDialog(family: Family | null): {
     </Sheet>
   );
 
-  return { open, dialog };
+  return { open, sheet };
 }

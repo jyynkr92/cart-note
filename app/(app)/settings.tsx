@@ -18,7 +18,7 @@ import { NearbyAlertToggle } from '@/src/geofence/NearbyAlertToggle';
 import { signOut } from '@/src/auth/auth-api';
 import { resolveCurrentFamily, useCurrentGroupStore } from '@/src/groups/current-group-store';
 import { leaveFamily, regenerateInviteCode } from '@/src/groups/group-api';
-import { useGroupNameDialog } from '@/src/groups/GroupNameDialog';
+import { useGroupNameSheet } from '@/src/groups/GroupNameSheet';
 import { inviteExpiry } from '@/src/groups/invite-expiry';
 import { useCurrentGroup, useFamilyMembers } from '@/src/groups/use-groups';
 import { mk, qk } from '@/src/lib/query-keys';
@@ -45,7 +45,7 @@ export default function Settings() {
   const [busy, setBusy] = useState(false);
   // 상태 갱신 전에 두 번 눌러도 한 번만 실행되게 하는 잠금(재발급/나가기/이름 저장/로그아웃).
   const inFlight = useRef(false);
-  const groupName = useGroupNameDialog(family);
+  const groupName = useGroupNameSheet(family);
   // 나간 뒤에는 목록이 갱신되며 다른 그룹/빈 화면이 잠깐 비치지 않도록 계속 로딩을 보여 준다.
   const [leaving, setLeaving] = useState(false);
 
@@ -334,7 +334,7 @@ export default function Settings() {
         onCancel={() => setMode(null)}
       />
 
-      {groupName.dialog}
+      {groupName.sheet}
     </ScrollView>
   );
 }

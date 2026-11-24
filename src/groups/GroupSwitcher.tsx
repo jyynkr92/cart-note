@@ -5,12 +5,12 @@ import { MenuSheet, type MenuSheetItem } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 import { useCurrentGroupStore } from './current-group-store';
 import type { Family } from './group-api';
-import { useGroupNameDialog } from './GroupNameDialog';
+import { useGroupNameSheet } from './GroupNameSheet';
 
 export function GroupSwitcher({ family, families }: { family: Family; families: Family[] }) {
   const router = useRouter();
   const { setFamilyId } = useCurrentGroupStore();
-  const { open, dialog } = useGroupNameDialog(family);
+  const { open, sheet } = useGroupNameSheet(family);
 
   if (families.length < 2) {
     return <Text className="text-xl font-bold">{family.name}</Text>;
@@ -39,7 +39,7 @@ export function GroupSwitcher({ family, families }: { family: Family; families: 
         )}
       />
 
-      {dialog}
+      {sheet}
     </View>
   );
 }
