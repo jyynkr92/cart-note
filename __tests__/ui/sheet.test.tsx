@@ -433,6 +433,28 @@ describe('SheetInput', () => {
     expect(spy.mock.lastCall?.[0]).not.toHaveProperty('value');
   });
 
+  it('a late echo of its own earlier text does not remount (the portal delivers value one render late)', async () => {
+    const { spy, mounts } = spyOnSheetTextInput();
+    const onChangeText = jest.fn();
+    const ui = (value: string) => (
+      <Sheet open onOpenChange={jest.fn()}>
+        <SheetInput placeholder="목록 이름" value={value} onChangeText={onChangeText} />
+      </Sheet>
+    );
+    const { rerender } = await render(ui(''));
+    await fireEvent.changeText(screen.getByPlaceholderText('목록 이름'), 'ㅎ');
+    await fireEvent.changeText(screen.getByPlaceholderText('목록 이름'), '하');
+    await rerender(ui('ㅎ'));
+    expect(mounts.count).toBe(1);
+    await rerender(ui('하'));
+    expect(mounts.count).toBe(1);
+    expect(onChangeText.mock.calls).toEqual([['ㅎ'], ['하']]);
+    // 한 번도 친 적 없는 값은 바깥 변경이라 다시 마운트한다.
+    await rerender(ui('두부'));
+    expect(mounts.count).toBe(2);
+    expect(spy.mock.lastCall?.[0].defaultValue).toBe('두부');
+  });
+
   it('shares Input classes, including disabled opacity and the native placeholder colour', () => {
     // Jest에서는 nativewind가 className을 style로 바꾸지 않아 렌더 결과로는 비교할 수 없다.
     // 두 입력 칸 모두 inputClassName(editable)을 쓰므로 그 결과를 확인한다.

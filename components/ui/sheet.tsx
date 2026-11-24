@@ -201,7 +201,8 @@ function SheetFooter({ className, children }: SheetPartProps) {
  * TextInput에 value를 내려 주면 글자를 칠 때마다 네이티브 텍스트를 다시 넣으면서 IME가 조합 중인
  * 글자를 확정해 버려, 한글이 "ㅎㅏㅇㅣ"처럼 풀리고 추천 단어도 안 뜬다(SheetInput 자체 상태로 옮겨도 같다).
  * 그래서 value를 제어 입력으로 되돌리지 말 것. 호출부는 그대로 value/onChangeText를 넘기고, 여기서는
- * 직접 친 글자와 다른 value가 바깥에서 들어올 때만 key를 바꿔 새 defaultValue로 다시 마운트한다.
+ * 스스로 낸 적 없는 value가 바깥에서 들어올 때만 key를 바꿔 새 defaultValue로 다시 마운트한다
+ * (늦게 도착한 자기 글자의 메아리로 다시 마운트하면 조합 중인 글자가 사라진다).
  */
 function SheetInput({
   className,
@@ -211,19 +212,28 @@ function SheetInput({
   onChangeText,
   ...props
 }: React.ComponentProps<typeof TextInput>) {
-  // typed: 네이티브 칸이 지금 들고 있다고 아는 글자(마운트 값 또는 마지막 onChangeText).
+  // seen: 네이티브 칸이 들고 있었던 글자를 순서대로 모은 것(마운트 값, 그 뒤 onChangeText로 낸 글자들).
+  // 포털을 거친 value는 한 렌더 늦게 도착하므로, 이미 지나간 자기 글자의 메아리일 수 있다.
   const [native, setNative] = React.useState(() => {
     const text = value ?? defaultValue;
-    return { key: 0, initial: text, typed: text };
+    return { key: 0, initial: text, seen: [text] };
   });
-  if (value !== undefined && value !== native.typed) {
-    // 바깥에서 바뀐 값(초기화·정리 등)은 다시 마운트해서 반영한다. 렌더 중 상태 갱신은 이 컴포넌트 것만 바꾼다.
-    setNative({ key: native.key + 1, initial: value, typed: value });
+  if (value !== undefined) {
+    const at = native.seen.indexOf(value);
+    if (at === -1) {
+      // 한 번도 낸 적 없는 값 = 바깥 변경(초기화·정리 등). 다시 마운트해서 반영한다.
+      // 렌더 중 상태 갱신은 이 컴포넌트 것만 바꾸는 파생 상태 패턴이다.
+      setNative({ key: native.key + 1, initial: value, seen: [value] });
+    } else if (at > 0) {
+      // 호출부가 여기까지 따라왔으니 그 앞의 글자는 더 이상 메아리로 오지 않는다. 지워야 나중에
+      // 같은 글자로 바깥에서 되돌릴 때(예: 비우기) 그것을 메아리로 오인하지 않는다.
+      setNative({ ...native, seen: native.seen.slice(at) });
+    }
   }
 
   const handleChangeText = React.useCallback(
     (text: string) => {
-      setNative((prev) => (prev.typed === text ? prev : { ...prev, typed: text }));
+      setNative((prev) => ({ ...prev, seen: [...prev.seen, text] }));
       onChangeText?.(text);
     },
     [onChangeText]
