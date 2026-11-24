@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 import { BackHandler, Pressable, Text } from 'react-native';
 import { inputClassName } from '@/components/ui/input';
 import {
@@ -6,6 +6,7 @@ import {
   MenuSheet,
   Sheet,
   SheetInput,
+  useLastWhileOpen,
   type MenuSheetItem,
 } from '@/components/ui/sheet';
 import * as BottomSheetMock from '@/test-utils/bottom-sheet';
@@ -163,6 +164,42 @@ describe('Sheet', () => {
     expect(screen.getByText('내용')).toBeTruthy();
     await release();
     expect(screen.queryByText('내용')).toBeNull();
+  });
+
+  it('content is not touchable while the close animation runs', async () => {
+    const press = jest.fn();
+    const sheet = (open: boolean) => (
+      <Sheet open={open} onOpenChange={jest.fn()}>
+        <Pressable accessibilityRole="button" accessibilityLabel="저장" onPress={press} />
+      </Sheet>
+    );
+    const { rerender } = await render(sheet(true));
+    const release = holdSheetDismissals();
+    await rerender(sheet(false));
+    // 닫는 동안에도 내용은 보이지만 눌리지 않는다(두 번 눌러 같은 동작을 반복하지 않게).
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await fireEvent.press(screen.getByRole('button', { name: '저장' }));
+    warn.mockRestore();
+    expect(press).not.toHaveBeenCalled();
+    await release();
+  });
+
+  it('a reopen during a programmatic close re-presents without calling onClosed', async () => {
+    const onClosed = jest.fn();
+    const sheet = (open: boolean) => (
+      <Sheet open={open} onOpenChange={jest.fn()} onClosed={onClosed}>
+        <Text>내용</Text>
+      </Sheet>
+    );
+    const { rerender } = await render(sheet(true));
+    const release = holdSheetDismissals();
+    await rerender(sheet(false));
+    await rerender(sheet(true));
+    await release();
+    expect(onClosed).not.toHaveBeenCalled();
+    expect(screen.getByText('내용')).toBeTruthy();
+    await rerender(sheet(false));
+    expect(onClosed).toHaveBeenCalledTimes(1);
   });
 
   it('shows the content it had when the close started until the close finishes (mock models the library)', async () => {
@@ -355,6 +392,62 @@ describe('ConfirmSheet', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
+  it('pressing confirm twice calls onConfirm once', async () => {
+    const onConfirm = jest.fn();
+    const onCancel = jest.fn();
+    await render(renderConfirm(true, onConfirm, onCancel));
+    await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
+    await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('after cancel, neither button does anything until reopened', async () => {
+    const onConfirm = jest.fn();
+    const onCancel = jest.fn();
+    const { rerender } = await render(renderConfirm(true, onConfirm, onCancel));
+    await fireEvent.press(screen.getByRole('button', { name: '취소' }));
+    await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
+    await fireEvent.press(screen.getByRole('button', { name: '취소' }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+    // 다시 열면 다시 답할 수 있다.
+    await rerender(renderConfirm(false, onConfirm, onCancel));
+    await rerender(renderConfirm(true, onConfirm, onCancel));
+    await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('unanswered: a reopen during a programmatic close re-presents with no extra callbacks', async () => {
+    const onConfirm = jest.fn();
+    const onCancel = jest.fn();
+    const { rerender } = await render(renderConfirm(true, onConfirm, onCancel));
+    const release = holdSheetDismissals();
+    await rerender(renderConfirm(false, onConfirm, onCancel));
+    await rerender(renderConfirm(true, onConfirm, onCancel));
+    await release();
+    expect(screen.getByRole('header', { name: '목록 삭제' })).toBeTruthy();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('confirmed: a reopen during the close resets the answer; a later user dismiss cancels once', async () => {
+    const onConfirm = jest.fn();
+    const onCancel = jest.fn();
+    const { rerender } = await render(renderConfirm(true, onConfirm, onCancel));
+    const release = holdSheetDismissals();
+    await fireEvent.press(screen.getByRole('button', { name: '삭제' }));
+    await rerender(renderConfirm(false, onConfirm, onCancel));
+    await rerender(renderConfirm(true, onConfirm, onCancel));
+    await release();
+    expect(screen.getByRole('header', { name: '목록 삭제' })).toBeTruthy();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+    await dismissSheetByUser();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
   it('uses a custom cancel label and can disable confirm', async () => {
     const onConfirm = jest.fn();
     await render(
@@ -379,7 +472,6 @@ describe('MenuSheet', () => {
   function renderMenu(items: MenuSheetItem[]) {
     return render(
       <MenuSheet
-        title="목록"
         items={items}
         trigger={(open) => (
           <Pressable accessibilityRole="button" accessibilityLabel="목록 메뉴" onPress={open} />
@@ -441,7 +533,7 @@ describe('MenuSheet', () => {
     expect(rename).not.toHaveBeenCalled();
   });
 
-  it('a press followed by a reopen before the close finishes runs the item exactly once', async () => {
+  it('a reopen before the close finishes cancels the pending item', async () => {
     const rename = jest.fn();
     await renderMenu([{ label: '이름 바꾸기', onPress: rename }]);
     await openMenu();
@@ -449,10 +541,63 @@ describe('MenuSheet', () => {
     await fireEvent.press(screen.getByRole('menuitem', { name: '이름 바꾸기' }));
     await openMenu();
     await release();
+    // 메뉴가 다시 올라왔고, 앞서 누른 항목은 취소됐다(메뉴와 그 항목이 연 시트가 겹치지 않게).
+    expect(rename).not.toHaveBeenCalled();
+    expect(screen.getByRole('menuitem', { name: '이름 바꾸기' })).toBeTruthy();
+    // 다시 열린 메뉴에서 고르면 한 번 부른다.
+    await fireEvent.press(screen.getByRole('menuitem', { name: '이름 바꾸기' }));
     expect(rename).toHaveBeenCalledTimes(1);
-    // 다시 열린 메뉴를 닫아도 앞서 누른 항목을 또 부르지 않는다.
+  });
+
+  it('idle: a reopen during the close re-presents and runs no item', async () => {
+    const rename = jest.fn();
+    await renderMenu([{ label: '이름 바꾸기', onPress: rename }]);
+    await openMenu();
+    const release = holdSheetDismissals();
     await fireEvent.press(screen.getByRole('button', { name: '취소' }));
+    await openMenu();
+    await release();
+    expect(screen.getByRole('menuitem', { name: '이름 바꾸기' })).toBeTruthy();
+    expect(rename).not.toHaveBeenCalled();
+  });
+
+  it('idle: unmounting an open menu ignores the late dismiss and runs nothing', async () => {
+    const rename = jest.fn();
+    const { unmount } = await renderMenu([{ label: '이름 바꾸기', onPress: rename }]);
+    await openMenu();
+    await unmount();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(rename).not.toHaveBeenCalled();
+  });
+
+  it('pending: a user dismiss during the close runs the item once', async () => {
+    const rename = jest.fn();
+    await renderMenu([{ label: '이름 바꾸기', onPress: rename }]);
+    await openMenu();
+    const release = holdSheetDismissals();
+    await fireEvent.press(screen.getByRole('menuitem', { name: '이름 바꾸기' }));
+    // 닫는 도중에 사용자가 끌어 닫아도 새 닫기는 생기지 않는다.
+    await dismissSheetByUser();
+    await release();
     expect(rename).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menuitem', { name: '이름 바꾸기' })).toBeNull();
+    // 메뉴는 닫힌 상태 그대로다(사용자 닫기로 다시 상태가 바뀌지 않는다). 다시 열 수 있다.
+    await openMenu();
+    expect(screen.getByRole('menuitem', { name: '이름 바꾸기' })).toBeTruthy();
+    expect(rename).toHaveBeenCalledTimes(1);
+  });
+
+  it('pending: unmounting during the close never runs the item', async () => {
+    const rename = jest.fn();
+    const { unmount } = await renderMenu([{ label: '이름 바꾸기', onPress: rename }]);
+    await openMenu();
+    const release = holdSheetDismissals();
+    await fireEvent.press(screen.getByRole('menuitem', { name: '이름 바꾸기' }));
+    await unmount();
+    await release();
+    expect(rename).not.toHaveBeenCalled();
   });
 
   it('marks the selected item', async () => {
@@ -463,5 +608,25 @@ describe('MenuSheet', () => {
     await openMenu();
     expect(screen.getByRole('menuitem', { name: '우리 집' })).toBeSelected();
     expect(screen.getByRole('menuitem', { name: '회사' })).not.toBeSelected();
+  });
+});
+
+describe('useLastWhileOpen', () => {
+  it('follows the value while open, keeps the last open value while closed, follows again when reopened', async () => {
+    const { result, rerender } = await renderHook(
+      ({ value, open }: { value: string; open: boolean }) => useLastWhileOpen(value, open),
+      { initialProps: { value: 'a', open: true } }
+    );
+    const steps: [value: string, open: boolean, expected: string][] = [
+      ['b', true, 'b'], // 열려 있는 동안 값을 따른다
+      ['c', false, 'b'], // 닫는 렌더에서 바뀐 값 대신 마지막으로 열려 있던 때의 값
+      ['d', false, 'b'], // 닫혀 있는 동안에도 그대로
+      ['e', true, 'e'], // 다시 열리면 새 값
+    ];
+    expect(result.current).toBe('a');
+    for (const [value, open, expected] of steps) {
+      await rerender({ value, open });
+      expect(result.current).toBe(expected);
+    }
   });
 });

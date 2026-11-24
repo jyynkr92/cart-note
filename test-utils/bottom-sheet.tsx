@@ -7,12 +7,12 @@
 //   그래서 시트를 닫는 렌더에서 내용을 바꾸면 닫는 동안 바뀐 내용이 보이는 것까지 드러난다.
 // - 닫는 중에 present()가 와도 그 닫기는 끝까지 가고 onDismiss가 늦게 온다.
 // - 올라와 있던 모달이 언마운트되면 닫고(마이크로태스크 뒤, 미루기 중이면 release 때) 마지막 onDismiss를 부른다.
-// 흉내 내지 않는 것: 애니메이션·스냅 지점·동적 높이(snapToIndex 등은 아무것도 안 한다), 제스처,
+// 흉내 내지 않는 것: 애니메이션·스냅 지점·동적 높이(Sheet가 쓰는 present/dismiss만 있다), 제스처,
 // 배경(BottomSheetBackdrop은 아무것도 그리지 않는다), 키보드 동작, Portal/Provider(children을 제자리에 그린다),
 // onChange/onAnimate 같은 다른 콜백.
 import { act } from '@testing-library/react-native';
 import * as React from 'react';
-import { TextInput } from 'react-native';
+import { ScrollView, TextInput } from 'react-native';
 
 type Entry = { dismiss: () => void; closing: boolean };
 
@@ -65,7 +65,6 @@ export const BottomSheetModal = React.forwardRef<unknown, ModalProps>(
           held.push(() => finish(current));
         } else finish(current);
       };
-      const noop = () => {};
       return {
         // 닫는 중에 present()가 와도 라이브러리처럼 그 닫기는 끝까지 간다(늦은 onDismiss).
         present: () => {
@@ -75,12 +74,6 @@ export const BottomSheetModal = React.forwardRef<unknown, ModalProps>(
           setVisible(true);
         },
         dismiss,
-        close: dismiss,
-        forceClose: dismiss,
-        snapToIndex: noop,
-        snapToPosition: noop,
-        expand: noop,
-        collapse: noop,
       };
     }, []);
     // 라이브러리처럼, 올라와 있던 모달이 언마운트되면 닫고(닫는 애니메이션 뒤) 마지막 onDismiss를 부른다.
@@ -109,6 +102,7 @@ function Pass({ children }: { children?: React.ReactNode }) {
 export const BottomSheetModalProvider = Pass;
 export const BottomSheetView = Pass;
 export const BottomSheetTextInput = TextInput;
+export const BottomSheetScrollView = ScrollView;
 export const BottomSheetBackdrop = () => null;
 
 /** 맨 위 bottom sheet를 사용자가 끌어 닫거나 배경을 누른 것처럼 닫는다(Sheet의 dismiss()를 거치지 않는다). */
