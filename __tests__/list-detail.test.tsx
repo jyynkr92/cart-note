@@ -96,11 +96,7 @@ const items = fetchItems as jest.Mock;
 
 let client: QueryClient;
 const renderWithClient = (ui: ReactElement) =>
-  render(
-    <QueryClientProvider client={client}>
-      {ui}
-    </QueryClientProvider>
-  );
+  render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 
 async function openMenu() {
   await fireEvent.press(await screen.findByRole('button', { name: '목록 메뉴' }));
@@ -162,6 +158,34 @@ describe('items', () => {
     );
   });
 
+  it('toggles done when the row (name) is tapped, and back again', async () => {
+    items.mockResolvedValue([
+      item({ id: 'i1', name: '우유', is_done: true, done_at: '2026-01-02T00:00:00Z' }),
+    ]);
+    await renderWithClient(<ListDetail />);
+    await fireEvent.press(await screen.findByText('우유'));
+    await waitFor(() =>
+      expect(updateItem).toHaveBeenCalledWith('i1', { is_done: false, done_at: null })
+    );
+    expect(screen.queryByPlaceholderText('항목 이름')).toBeNull();
+  });
+
+  it('opens nothing on a row tap but opens the edit sheet from the 편집 button', async () => {
+    items.mockResolvedValue([item({ id: 'i1', name: '우유' })]);
+    await renderWithClient(<ListDetail />);
+    await fireEvent.press(await screen.findByText('우유'));
+    expect(screen.queryByPlaceholderText('항목 이름')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: '편집' }));
+    expect(await screen.findByPlaceholderText('항목 이름')).toBeTruthy();
+  });
+
+  it('exposes the header back and menu buttons as buttons', async () => {
+    items.mockResolvedValue([]);
+    await renderWithClient(<ListDetail />);
+    expect(await screen.findByRole('button', { name: '뒤로' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '목록 메뉴' })).toBeTruthy();
+  });
+
   it('shows finished items under a counted "완료됨" section, most recent first', async () => {
     items.mockResolvedValue([
       item({ id: 'i1', name: '우유' }),
@@ -184,7 +208,7 @@ describe('items', () => {
   it('edits the name and note from the edit sheet', async () => {
     items.mockResolvedValue([item({ id: 'i1', name: '우유' })]);
     await renderWithClient(<ListDetail />);
-    await fireEvent.press(await screen.findByText('우유'));
+    await fireEvent.press(await screen.findByRole('button', { name: '편집' }));
     const name = await screen.findByPlaceholderText('항목 이름');
     expect(name.props.defaultValue).toBe('우유');
     expect(name.props.maxLength).toBe(200);
@@ -200,7 +224,7 @@ describe('items', () => {
   it('does not save an item whose name is only whitespace', async () => {
     items.mockResolvedValue([item({ id: 'i1', name: '우유' })]);
     await renderWithClient(<ListDetail />);
-    await fireEvent.press(await screen.findByText('우유'));
+    await fireEvent.press(await screen.findByRole('button', { name: '편집' }));
     await fireEvent.changeText(await screen.findByPlaceholderText('항목 이름'), '   ');
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
     expect(updateItem).not.toHaveBeenCalled();

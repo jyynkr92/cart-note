@@ -1,6 +1,8 @@
+import { Pencil } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
 import type { Item } from './item-api';
@@ -8,9 +10,9 @@ import type { Item } from './item-api';
 type Props = {
   item: Item;
   onToggle: (item: Item) => void;
-  onPress: (item: Item) => void;
+  onEdit: (item: Item) => void;
   onDelete: (item: Item) => void;
-  /** 선택 모드 여부. 켜져 있으면 탭은 선택 토글이고 체크박스/스와이프 삭제는 꺼진다. */
+  /** 선택 모드 여부. 켜져 있으면 탭은 선택 토글이고 연필(편집)은 숨고 체크박스/스와이프 삭제는 꺼진다. */
   selecting?: boolean;
   selected?: boolean;
   onLongPress?: (item: Item) => void;
@@ -21,7 +23,7 @@ type Props = {
 export function ItemRow({
   item,
   onToggle,
-  onPress,
+  onEdit,
   onDelete,
   selecting = false,
   selected = false,
@@ -58,7 +60,7 @@ export function ItemRow({
         />
         <Pressable
           className="flex-1"
-          onPress={() => (selecting ? onSelectToggle?.(item) : onPress(item))}
+          onPress={() => (selecting ? onSelectToggle?.(item) : onToggle(item))}
           onLongPress={() => onLongPress?.(item)}
           accessibilityRole="button"
           accessibilityState={{ selected }}>
@@ -69,6 +71,16 @@ export function ItemRow({
           </Text>
           {item.note ? <Text className="text-sm text-muted-foreground">{item.note}</Text> : null}
         </Pressable>
+        {selecting ? null : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="편집"
+            hitSlop={4}
+            onPress={() => onEdit(item)}
+            className="size-11 items-center justify-center">
+            <Icon as={Pencil} className="size-5 text-muted-foreground" />
+          </Pressable>
+        )}
       </View>
     </ReanimatedSwipeable>
   );

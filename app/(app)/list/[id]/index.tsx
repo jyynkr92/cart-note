@@ -1,3 +1,4 @@
+import { ChevronLeft, Ellipsis } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, BackHandler, ScrollView, View } from 'react-native';
@@ -12,6 +13,7 @@ import {
   SheetTitle,
   useLastWhileOpen,
 } from '@/components/ui/sheet';
+import { Icon } from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Text } from '@/components/ui/text';
 import { useCurrentGroup } from '@/src/groups/use-groups';
@@ -213,9 +215,10 @@ export default function ListDetail() {
             <Button
               variant="ghost"
               size="icon"
+              className="size-11"
               accessibilityLabel="뒤로"
               onPress={() => router.back()}>
-              <Text>‹</Text>
+              <Icon as={ChevronLeft} className="size-6" />
             </Button>
             <Text className="flex-1 text-xl font-bold" numberOfLines={1}>
               {list.name}
@@ -223,8 +226,13 @@ export default function ListDetail() {
           </View>
           <MenuSheet
             trigger={(show) => (
-              <Button variant="ghost" size="icon" accessibilityLabel="목록 메뉴" onPress={show}>
-                <Text>⋯</Text>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-11"
+                accessibilityLabel="목록 메뉴"
+                onPress={show}>
+                <Icon as={Ellipsis} className="size-6" />
               </Button>
             )}
             items={[
@@ -287,7 +295,7 @@ export default function ListDetail() {
               key={i.id}
               item={i}
               onToggle={(it) => toggleItem.mutate({ item: it })}
-              onPress={setEditing}
+              onEdit={setEditing}
               onDelete={(it) => deleteItems.mutate({ listId, ids: [it.id] })}
               selecting={selection.active}
               selected={selection.selected.has(i.id)}
@@ -305,7 +313,7 @@ export default function ListDetail() {
                   key={i.id}
                   item={i}
                   onToggle={(it) => toggleItem.mutate({ item: it })}
-                  onPress={setEditing}
+                  onEdit={setEditing}
                   onDelete={(it) => deleteItems.mutate({ listId, ids: [it.id] })}
                   selecting={selection.active}
                   selected={selection.selected.has(i.id)}
