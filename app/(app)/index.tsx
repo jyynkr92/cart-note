@@ -2,7 +2,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Settings } from 'lucide-react-native';
 import { useState } from 'react';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import ReorderableList, {
+  useReorderableDrag,
+  type ReorderableListReorderEvent,
+} from 'react-native-reorderable-list';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetFooter, SheetHeader, SheetInput, SheetTitle } from '@/components/ui/sheet';
 import { Icon } from '@/components/ui/icon';
@@ -10,13 +14,24 @@ import { Text } from '@/components/ui/text';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { GroupSwitcher } from '@/src/groups/GroupSwitcher';
 import { useCurrentGroup, useFamilyMembers } from '@/src/groups/use-groups';
-import { ListCard, sortLists } from '@/src/lists/ListCard';
-import { useCreateList, useLists } from '@/src/lists/use-lists';
+import { ListCard, moveId, sortLists } from '@/src/lists/ListCard';
+import type { List } from '@/src/lists/list-api';
+import { useCreateList, useLists, useReorderLists } from '@/src/lists/use-lists';
 import { qk } from '@/src/lib/query-keys';
 import { MAX_LENGTH, normalizeName } from '@/src/lib/text';
 import { useTopInset } from '@/src/lib/use-top-inset';
 
 type NewKind = 'store' | 'online';
+
+/** 끌 수 있는 목록 카드. 길게 누르면 집고, 짧게 누르면 상세로 간다. */
+function DraggableListCard({ list, onPress }: { list: List; onPress: () => void }) {
+  const drag = useReorderableDrag();
+  return (
+    <View className="pb-3">
+      <ListCard list={list} onPress={onPress} onLongPress={drag} />
+    </View>
+  );
+}
 
 export default function Home() {
   const router = useRouter();
@@ -29,6 +44,11 @@ export default function Home() {
   const lists = useLists(familyId);
   const members = useFamilyMembers(familyId);
   const createList = useCreateList();
+  const reorderLists = useReorderLists();
+  // 놓은 순간의 새 순서. onMutate가 캐시를 바꾸기 전(비동기) 한 번이라도 옛 순서로 돌아가 보이지 않도록,
+  // 놓을 때의 캐시 데이터(base)가 그대로인 동안만 이 순서로 그린다. 캐시가 바뀌면(낙관적 반영, 롤백, 재조회) 버린다.
+  const [dropped, setDropped] = useState<{ base: List[] | undefined; ids: string[] } | null>(null);
+  if (dropped && dropped.base !== lists.data) setDropped(null);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [kind, setKind] = useState<NewKind>('store');
@@ -65,6 +85,25 @@ export default function Home() {
   }
 
   const trimmed = normalizeName(name);
+  const sorted = sortLists(lists.data ?? []);
+  const inbox = sorted.filter((l) => l.kind === 'inbox');
+  let movable = sorted.filter((l) => l.kind !== 'inbox');
+  if (dropped && dropped.base === lists.data) {
+    const byId = new Map(movable.map((l) => [l.id, l]));
+    movable = dropped.ids.flatMap((id) => byId.get(id) ?? []);
+  }
+  const open = (id: string) => router.push({ pathname: '/list/[id]', params: { id } });
+
+  function reorder({ from, to }: ReorderableListReorderEvent) {
+    if (from === to || !familyId) return;
+    const ids = moveId(
+      movable.map((l) => l.id),
+      from,
+      to
+    );
+    setDropped({ base: lists.data, ids });
+    reorderLists.mutate({ familyId, ids });
+  }
 
   function openAdd() {
     setName('');
@@ -102,25 +141,34 @@ export default function Home() {
           </Button>
         </View>
       ) : (
-        <ScrollView contentContainerClassName="gap-3 pb-6">
-          {sortLists(lists.data ?? []).map((item) => (
-            <ListCard
-              key={item.id}
-              list={item}
-              onPress={() => router.push({ pathname: '/list/[id]', params: { id: item.id } })}
-            />
-          ))}
-          <View className="gap-4">
-            <Button variant="outline" onPress={openAdd}>
-              <Text>+ 목록 추가</Text>
-            </Button>
-            {members.data?.length === 1 ? (
-              <Text className="text-center text-sm text-muted-foreground">
-                가족을 초대해 함께 써보세요
-              </Text>
-            ) : null}
-          </View>
-        </ScrollView>
+        // 카드 사이 간격은 셀 안의 pb-3으로 준다(라이브러리가 셀 높이로 끌 자리를 계산하므로 gap을 쓰지 않는다).
+        <ReorderableList
+          data={movable}
+          keyExtractor={(item) => item.id}
+          onReorder={reorder}
+          renderItem={({ item }) => <DraggableListCard list={item} onPress={() => open(item.id)} />}
+          ListHeaderComponent={
+            <>
+              {inbox.map((item) => (
+                <View key={item.id} className="pb-3">
+                  <ListCard list={item} onPress={() => open(item.id)} />
+                </View>
+              ))}
+            </>
+          }
+          ListFooterComponent={
+            <View className="gap-4 pb-6">
+              <Button variant="outline" onPress={openAdd}>
+                <Text>+ 목록 추가</Text>
+              </Button>
+              {members.data?.length === 1 ? (
+                <Text className="text-center text-sm text-muted-foreground">
+                  가족을 초대해 함께 써보세요
+                </Text>
+              ) : null}
+            </View>
+          }
+        />
       )}
 
       <Sheet open={adding} onOpenChange={setAdding}>
@@ -152,7 +200,7 @@ export default function Home() {
             accessibilityRole="radio"
             accessibilityState={{ selected: kind === 'online' }}
             onPress={() => setKind('online')}>
-            <Text>사이트</Text>
+            <Text>온라인</Text>
           </Button>
         </View>
         <SheetFooter>

@@ -52,6 +52,15 @@ afterEach(() => {
   (globalThis as { __resetBottomSheetMock?: () => void }).__resetBottomSheetMock?.();
 });
 
+// 끌어서 순서 바꾸기 목록도 reanimated/gesture-handler 위에서 돈다. Jest에서는 항목을 그대로 그리고
+// onReorder를 테스트에서 부를 수 있는 목으로 대체한다(test-utils/reorderable-list.tsx).
+jest.mock('react-native-reorderable-list', () =>
+  jest.requireActual('@/test-utils/reorderable-list')
+);
+afterEach(() => {
+  (globalThis as { __resetReorderableListMock?: () => void }).__resetReorderableListMock?.();
+});
+
 // expo-clipboard는 네이티브 모듈이라 Jest에서는 대체한다.
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn().mockResolvedValue(true) }));
 
