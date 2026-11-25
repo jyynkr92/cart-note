@@ -203,6 +203,8 @@ function SheetFooter({ className, children }: SheetPartProps) {
  * 그래서 value를 제어 입력으로 되돌리지 말 것. 호출부는 그대로 value/onChangeText를 넘기고, 여기서는
  * 스스로 낸 적 없는 value가 바깥에서 들어올 때만 key를 바꿔 새 defaultValue로 다시 마운트한다
  * (늦게 도착한 자기 글자의 메아리로 다시 마운트하면 조합 중인 글자가 사라진다).
+ * 호출부는 onChangeText로 받은 글자를 그대로 value로 돌려줘야 한다. 다듬거나(trim·대문자·걸러내기) 바꿔서
+ * 돌려주면 매번 "낸 적 없는 값"이 되어 글자마다 다시 마운트되고 조합·포커스가 깨진다. 다듬기는 저장할 때 한다.
  */
 function SheetInput({
   className,
@@ -233,10 +235,11 @@ function SheetInput({
 
   const handleChangeText = React.useCallback(
     (text: string) => {
-      setNative((prev) => ({ ...prev, seen: [...prev.seen, text] }));
+      // 비제어로 쓰면(value 없음) 메아리가 올 일이 없으니 쌓지 않는다.
+      if (value !== undefined) setNative((prev) => ({ ...prev, seen: [...prev.seen, text] }));
       onChangeText?.(text);
     },
-    [onChangeText]
+    [onChangeText, value]
   );
 
   return (

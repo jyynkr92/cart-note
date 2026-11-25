@@ -163,6 +163,8 @@ describe('items', () => {
       item({ id: 'i1', name: '우유', is_done: true, done_at: '2026-01-02T00:00:00Z' }),
     ]);
     await renderWithClient(<ListDetail />);
+    // 화면 낭독기에도 누르면 무엇이 되는지 알린다.
+    expect(await screen.findByHintText('눌러서 완료 해제')).toBeTruthy();
     await fireEvent.press(await screen.findByText('우유'));
     await waitFor(() =>
       expect(updateItem).toHaveBeenCalledWith('i1', { is_done: false, done_at: null })

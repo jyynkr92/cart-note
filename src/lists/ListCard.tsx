@@ -26,18 +26,37 @@ const KIND_MARK = {
   online: { icon: Globe, label: '온라인' },
 } as const;
 
+/** 끌기를 못 쓰는 VoiceOver·TalkBack 사용자를 위한 한 칸 옮기기. 옮길 수 없는 방향은 false. */
+export type MoveActions = { up: boolean; down: boolean; onMove: (delta: -1 | 1) => void };
+
 export function ListCard({
   list,
   onPress,
   onLongPress,
+  move,
 }: {
   list: List;
   onPress: () => void;
   onLongPress?: () => void;
+  move?: MoveActions;
 }) {
   const mark = list.kind === 'inbox' ? null : KIND_MARK[list.kind];
+  const actions = move
+    ? [
+        ...(move.up ? [{ name: 'moveUp', label: '위로 옮기기' }] : []),
+        ...(move.down ? [{ name: 'moveDown', label: '아래로 옮기기' }] : []),
+      ]
+    : undefined;
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityRole="button"
+      accessibilityActions={actions}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === 'moveUp') move?.onMove(-1);
+        else if (e.nativeEvent.actionName === 'moveDown') move?.onMove(1);
+      }}>
       <Card className="flex-row items-center justify-between px-4 py-4">
         <View className="flex-1 flex-row items-center gap-2">
           {mark ? (

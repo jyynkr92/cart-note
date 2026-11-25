@@ -1,6 +1,14 @@
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react-native';
 import type { ReactElement } from 'react';
 import { Keyboard } from 'react-native';
 import AppLayout from '@/app/(app)/_layout';
@@ -187,6 +195,67 @@ describe('reordering', () => {
     await screen.findByText('이마트');
     await reorderListItems(1, 1);
     expect(reorderLists).not.toHaveBeenCalled();
+  });
+
+  it('ignores an unknown picked index and clamps a drop past the end to the last slot', async () => {
+    await renderWithClient(<Home />);
+    await screen.findByText('이마트');
+    await reorderListItems(5, 0);
+    expect(reorderLists).not.toHaveBeenCalled();
+    expect(names()).toEqual(['사야할것', '이마트', '쿠팡', '코스트코']);
+    await reorderListItems(0, 7);
+    await waitFor(() => expect(reorderLists).toHaveBeenCalledWith('g1', ['l2', 'l3', 'l1']));
+  });
+
+  it('keeps the dragged order frozen while another member reorders mid-drag and moves the card picked up', async () => {
+    await renderWithClient(<Home />);
+    // 쿠팡(1번 자리)을 집는다.
+    await fireEvent(await screen.findByText('쿠팡'), 'longPress');
+    // 끄는 사이 다른 가족이 순서를 바꿔(코스트코, 이마트, 쿠팡) 재조회가 도착한다. 목록 수는 같다.
+    server = server.map((l) => ({ ...l, sort_order: { l3: 1, l1: 2, l2: 3 }[l.id] ?? 0 }));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['lists', 'g1'] });
+    });
+    await waitFor(() =>
+      expect(client.getQueryData<List[]>(['lists', 'g1'])?.find((l) => l.id === 'l3')?.sort_order).toBe(1)
+    );
+    // 끄는 동안에는 집을 때의 순서 그대로 그려 라이브러리의 자리 계산이 흔들리지 않는다.
+    expect(names()).toEqual(['사야할것', '이마트', '쿠팡', '코스트코']);
+    // 집은 쿠팡을 맨 아래(2번 자리)에 놓는다. 다른 목록(이마트)이 옮겨지면 안 된다.
+    await reorderListItems(1, 2);
+    await waitFor(() => expect(reorderLists).toHaveBeenCalledWith('g1', ['l1', 'l3', 'l2']));
+    expect(names()).toEqual(['사야할것', '이마트', '코스트코', '쿠팡']);
+  });
+
+  it('unfreezes when the card is released in place', async () => {
+    await renderWithClient(<Home />);
+    await fireEvent(await screen.findByText('쿠팡'), 'longPress');
+    server = server.map((l) => ({ ...l, sort_order: { l3: 1, l1: 2, l2: 3 }[l.id] ?? 0 }));
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ['lists', 'g1'] });
+    });
+    expect(names()).toEqual(['사야할것', '이마트', '쿠팡', '코스트코']);
+    await reorderListItems(1, 1);
+    await waitFor(() => expect(names()).toEqual(['사야할것', '코스트코', '이마트', '쿠팡']));
+    expect(reorderLists).not.toHaveBeenCalled();
+  });
+
+  it('lets screen-reader users move a card one step with accessibility actions', async () => {
+    await renderWithClient(<Home />);
+    const card = (name: string) =>
+      screen.getAllByRole('button').find((b) => within(b).queryByText(name))!;
+    await screen.findByText('이마트');
+    const actionNames = (name: string) =>
+      (card(name).props.accessibilityActions ?? []).map((a: { name: string }) => a.name);
+    expect(actionNames('사야할것')).toEqual([]);
+    expect(actionNames('이마트')).toEqual(['moveDown']);
+    expect(actionNames('쿠팡')).toEqual(['moveUp', 'moveDown']);
+    expect(actionNames('코스트코')).toEqual(['moveUp']);
+    await fireEvent(card('코스트코'), 'accessibilityAction', {
+      nativeEvent: { actionName: 'moveUp' },
+    });
+    expect(names()).toEqual(['사야할것', '이마트', '코스트코', '쿠팡']);
+    await waitFor(() => expect(reorderLists).toHaveBeenCalledWith('g1', ['l1', 'l3', 'l2']));
   });
 
   it('picks a card up on long press but not the inbox', async () => {

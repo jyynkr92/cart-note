@@ -63,7 +63,10 @@ export function ItemRow({
           onPress={() => (selecting ? onSelectToggle?.(item) : onToggle(item))}
           onLongPress={() => onLongPress?.(item)}
           accessibilityRole="button"
-          accessibilityState={{ selected }}>
+          accessibilityState={{ selected }}
+          accessibilityHint={
+            selecting ? '눌러서 선택' : item.is_done ? '눌러서 완료 해제' : '눌러서 완료 표시'
+          }>
           <Text
             testID="item-name"
             className={cn('text-base', item.is_done && 'text-muted-foreground line-through')}>
