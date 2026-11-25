@@ -45,6 +45,13 @@ module.exports = defineConfig([
               message:
                 '시트 내용 컨테이너는 components/ui/sheet.tsx가 정한다. 목록이 길면 <Sheet scrollable>을 쓴다.',
             },
+            {
+              // 시트 포털 안의 제어 입력 칸은 iOS 한글 조합을 깬다(docs/solutions/ui-bugs 참고).
+              name: '@gorhom/bottom-sheet',
+              importNames: ['BottomSheetTextInput'],
+              message:
+                '시트 안 입력 칸은 SheetInput(components/ui/sheet.tsx)을 쓴다. value를 그대로 넘기면 iOS 한글 조합이 풀린다.',
+            },
           ],
         },
       ],
