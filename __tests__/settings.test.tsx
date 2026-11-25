@@ -312,7 +312,7 @@ describe('changing my name', () => {
     mockAuth = { session: null, loading: false, offlineUserId: 'u1' };
     try {
       const input = await open();
-      expect(input.props.value).toBe('은정');
+      expect(input.props.defaultValue).toBe('은정');
     } finally {
       mockAuth = { session: { user: { id: 'u1' } }, loading: false, offlineUserId: null };
     }

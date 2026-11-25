@@ -88,11 +88,7 @@ const lists = fetchLists as jest.Mock;
 const items = fetchItems as jest.Mock;
 
 let client: QueryClient;
-const tree = (ui: ReactElement) => (
-  <QueryClientProvider client={client}>
-    {ui}
-  </QueryClientProvider>
-);
+const tree = (ui: ReactElement) => <QueryClientProvider client={client}>{ui}</QueryClientProvider>;
 const renderWithClient = (ui: ReactElement) => render(tree(ui));
 
 async function longPress(name: string) {
@@ -137,14 +133,25 @@ describe('selection mode', () => {
     expect(await screen.findByText('1개 선택됨')).toBeTruthy();
   });
 
+  it('hides the 편집 button while selecting and tapping a name toggles selection, not done', async () => {
+    await renderWithClient(<ListDetail />);
+    expect((await screen.findAllByRole('button', { name: '편집' })).length).toBeGreaterThan(0);
+    await longPress('우유');
+    await screen.findByText('1개 선택됨');
+    expect(screen.queryByRole('button', { name: '편집' })).toBeNull();
+    await fireEvent.press(screen.getByText('빵'));
+    expect(await screen.findByText('2개 선택됨')).toBeTruthy();
+    expect(updateItem).not.toHaveBeenCalled();
+  });
+
   it('ends when the last item is deselected', async () => {
     await renderWithClient(<ListDetail />);
     await longPress('우유');
     await fireEvent.press(await screen.findByText('우유'));
     await waitFor(() => expect(screen.queryByText(/개 선택됨/)).toBeNull());
     expect(screen.getByText('이마트')).toBeTruthy();
-    // 평소처럼 탭하면 편집 시트가 열린다.
-    await fireEvent.press(screen.getByText('우유'));
+    // 평소처럼 편집 버튼을 누르면 편집 시트가 열린다.
+    await fireEvent.press(screen.getAllByRole('button', { name: '편집' })[0]);
     expect(await screen.findByPlaceholderText('항목 이름')).toBeTruthy();
   });
 

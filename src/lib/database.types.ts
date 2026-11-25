@@ -174,11 +174,11 @@ isOneToOne: false
 "delete_family_if_empty":
 { Args: { "p_family_id": string }; Returns: boolean
                            },
-"family_item_count":
-{ Args: { "p_family_id": string }; Returns: number
-                           },
 "family_is_empty":
 { Args: { "p_family_id": string }; Returns: boolean
+                           },
+"family_item_count":
+{ Args: { "p_family_id": string }; Returns: number
                            },
 "gen_invite_code":
 { Args: Record<PropertyKey, never>; Returns: string
@@ -194,6 +194,9 @@ isOneToOne: false
                            },
 "regenerate_invite_code":
 { Args: { "p_family_id": string }; Returns: string
+                           },
+"reorder_lists":
+{ Args: { "p_family_id": string,"p_ids": (string)[] }; Returns: undefined
                            }
           }
           Enums: {

@@ -25,11 +25,12 @@ import {
 import { supabase } from '@/src/lib/supabase';
 import { chain } from '@/test-utils/supabase-chain';
 
-jest.mock('@/src/lib/supabase', () => ({ supabase: { from: jest.fn() } }));
+jest.mock('@/src/lib/supabase', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
 jest.mock('@/src/lib/toast', () => ({ toast: { error: jest.fn() } }));
 
 type Call = [string, unknown[]];
 const from = supabase.from as jest.Mock;
+const rpc = supabase.rpc as jest.Mock;
 let requests: { table: string; calls: Call[] }[] = [];
 
 const T = '2026-01-01T00:00:00.000Z';
@@ -56,9 +57,10 @@ const SAMPLE: Record<Exclude<keyof typeof mk, 'all'>, unknown> = {
   clearDone: { listId: 'l1', ids: ['a'] },
   clearList: { listId: 'l1', ids: ['a', 'b'] },
   moveItems: { fromListId: 'l1', toListId: 'l2', ids: ['a'] },
-  createList: { id: 'l9', familyId: 'f1', name: '마트', kind: 'store', createdAt: T },
+  createList: { id: 'l9', familyId: 'f1', name: '마트', kind: 'store', createdAt: T, sortOrder: 3 },
   renameList: { id: 'l1', familyId: 'f1', name: '새 이름' },
   deleteList: { id: 'l2', familyId: 'f1' },
+  reorderLists: { familyId: 'f1', ids: ['l2', 'l1'] },
   addLocation: {
     id: 'p9',
     listId: 'l1',
@@ -108,6 +110,11 @@ beforeEach(() => {
     const c = chain({ data: null, error: null });
     requests.push({ table, calls: c.calls });
     return c.builder;
+  });
+  // RPC는 서버가 대상(그룹·id)을 직접 확인하므로 요청 자체만 기록한다.
+  rpc.mockImplementation(async (fn: string, args: unknown) => {
+    requests.push({ table: `rpc:${fn}`, calls: [['rpc', [fn, args]]] });
+    return { data: null, error: null };
   });
   installSessionCheck(async () => 'u1');
   openSession('u1');
